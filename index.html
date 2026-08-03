@@ -409,19 +409,26 @@ function depositHeld(order){
  * itemBusyIntervals(item, orders, orderItems, nowMs) -> [{startMs, endMs, orderId, orderCode}]
  * Nguồn: các đơn status 'booked' hoặc 'picked_up' có chứa item đó (qua bảng order_items).
  * Mỗi đơn sinh 1 interval [pickup_at, effectiveEnd + buffer_hours]:
- *   - effectiveEnd = return_due_at            (đơn booked)
- *   - effectiveEnd = max(return_due_at, now)   (đơn picked_up chưa trả — quá hạn thì bận tới now)
+ *   - effectiveEnd = return_due_at   (đơn booked)
+ *   - effectiveEnd = Infinity        (đơn picked_up CHƯA TRẢ — bận VÔ HẠN cho tới khi đổi status
+ *                                     sang returned/closed; không hứa lịch cho ai khi chưa biết
+ *                                     bao giờ khách trả đồ. Audit-phase2 #1: bản cũ dùng
+ *                                     max(due, now) khiến khách quá hạn + buffer 0 vẫn hiện "sẵn
+ *                                     sàng" và cho đặt đè ngay sau 1 phút — SAI.)
  * Đơn returned/closed/cancelled KHÔNG sinh interval (không chặn lịch), kể cả nếu buffer của
  * lần thuê đó còn "trong hạn giặt" — trạng thái chờ giặt thể hiện qua manual_status, không qua lịch.
+ * buffer_hours âm (dữ liệu xấu lọt qua, lẽ ra bị chặn ở input/DB constraint — audit #4) được tự vệ
+ * ép về 0 tại đây, không được phép lùi mốc kết thúc bận về trước return_due_at.
  *
- * Test case (xem file test-schedule.js, chạy `node test-schedule.js` phải in PASS 7/7):
+ * Test case (xem file test-schedule.js, chạy `node test-schedule.js` phải in PASS toàn bộ):
  * 1. Hai đơn cùng ngày khác giờ, buffer 0 (props): 8-11h và 13-17h → KHÔNG trùng; 8-11h và 10-14h → TRÙNG.
  * 2. Buffer 24h: đơn A trả 17h ngày 5 → đơn B nhận 10h ngày 6 → TRÙNG (còn trong buffer); nhận 18h ngày 6 → KHÔNG trùng.
  * 3. Đơn qua đêm nhiều ngày.
- * 4. Đơn picked_up quá hạn (return_due_at hôm qua, chưa trả) → hôm nay vẫn bận.
+ * 4. Đơn picked_up CHƯA TRẢ → bận VÔ HẠN (endMs=Infinity) bất kể return_due_at đã qua hay chưa.
  * 5. Sửa đơn: đổi giờ của chính đơn đang sửa không tự báo trùng với chính nó (excludeOrderId).
  * 6. Chạm mép: A kết thúc (kể cả buffer) đúng 14:00, B bắt đầu 14:00 → không trùng.
  * 7. Đơn cancelled/returned không chặn.
+ * 8. buffer_hours âm bị ép về 0, không đảo/thu hẹp interval bận.
  */
 function itemBusyIntervals(item, orders, orderItems, nowMs){
   const orderIdsForItem = new Set(
@@ -433,8 +440,9 @@ function itemBusyIntervals(item, orders, orderItems, nowMs){
     if(o.status !== 'booked' && o.status !== 'picked_up') continue;
     const pickupMs = new Date(o.pickup_at).getTime();
     const dueMs = new Date(o.return_due_at).getTime();
-    const effectiveEnd = o.status === 'picked_up' ? Math.max(dueMs, nowMs) : dueMs;
-    const endMs = effectiveEnd + Number(item.buffer_hours||0)*3600000;
+    const effectiveEnd = o.status === 'picked_up' ? Infinity : dueMs;
+    const bufferMs = Math.max(0, Number(item.buffer_hours||0)) * 3600000;
+    const endMs = effectiveEnd === Infinity ? Infinity : effectiveEnd + bufferMs;
     result.push({startMs: pickupMs, endMs, orderId: o.id, orderCode: o.code});
   }
   return result;
@@ -452,7 +460,7 @@ function checkConflict(itemId, startMs, endMs, bufferHours, busyIntervals, exclu
     return {reason:'manual_status', manualStatus, itemId};
   }
   const newStart = startMs;
-  const newEnd = endMs + Number(bufferHours||0)*3600000;
+  const newEnd = endMs + Math.max(0, Number(bufferHours||0))*3600000;
   for(const iv of busyIntervals){
     if(excludeOrderId && iv.orderId === excludeOrderId) continue;
     if(newStart < iv.endMs && iv.startMs < newEnd){
@@ -491,43 +499,71 @@ function nextAvailableMs(item, busyIntervals, nowMs){
 /* ============================================================
    PHASE 2 — helper UI (dùng 3 hàm thuần ở trên, không phải hàm thuần)
    ============================================================ */
-// Trạng thái hiển thị của 1 món trên lưới Kho: xanh sẵn sàng / vàng đã đặt trong 3 ngày tới /
-// đỏ đang thuê / xám giặt-sửa-hỏng-nghỉ (manual_status ưu tiên cao nhất).
+// Trạng thái hiển thị của 1 món trên lưới Kho: xanh sẵn sàng / vàng đã đặt trong 3 ngày tới
+// (kèm giờ cụ thể nếu trong 24h tới) / đỏ đang thuê / xám giặt-sửa-hỏng-nghỉ.
+// audit-phase2 #9: manual_status vẫn ưu tiên hiển thị (chip xám), NHƯNG nếu món đang thực sự
+// nằm trong 1 đơn active (đã giao đồ) thì label ghi rõ thêm "(đang thuê)" — không che mất lịch
+// thật; checkConflict vẫn luôn chặn theo manual_status trước, không đổi.
+// audit-phase2 #1: đơn picked_up chưa trả → itemBusyIntervals trả endMs=Infinity → "Có lại" là
+// KHÔNG XÁC ĐỊNH (nextAvailableUnknown), không được format thành ngày (tránh Invalid Date).
 function computeItemStatus(item, orders, orderItems, nowMs){
-  if(item.manual_status !== 'ok'){
-    return {color:'gray', label: MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status, nextAvailableMs:null};
-  }
   const busy = itemBusyIntervals(item, orders, orderItems, nowMs);
   const currentlyBusy = busy.find(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
-  if(currentlyBusy){
-    return {color:'red', label:'Đang thuê', nextAvailableMs: nextAvailableMs(item, busy, nowMs)};
+
+  if(item.manual_status !== 'ok'){
+    const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
+    return {
+      color:'gray',
+      label: currentlyBusy ? `${baseLabel} (đang thuê)` : baseLabel,
+      nextAvailableMs:null, nextAvailableUnknown:false
+    };
   }
-  const in3Days = nowMs + 3*24*3600000;
-  const orderIdsForItem = new Set(orderItems.filter(oi=>oi.item_id===item.id).map(oi=>oi.order_id));
-  const upcoming = orders.some(o=>{
-    if(!orderIdsForItem.has(o.id)) return false;
-    if(o.status!=='booked') return false;
-    const pickupMs = new Date(o.pickup_at).getTime();
-    return pickupMs >= nowMs && pickupMs <= in3Days;
-  });
-  if(upcoming) return {color:'yellow', label:'Đã đặt', nextAvailableMs:null};
-  return {color:'green', label:'Sẵn sàng', nextAvailableMs:null};
+
+  if(currentlyBusy){
+    const nav = nextAvailableMs(item, busy, nowMs);
+    return {color:'red', label:'Đang thuê', nextAvailableMs: nav===Infinity?null:nav, nextAvailableUnknown: nav===Infinity};
+  }
+
+  // Chưa bận ngay lúc này: tìm interval bận SẮP TỚI gần nhất để quyết định vàng + hiện giờ cụ thể
+  // nếu bắt đầu trong 24h tới (audit #8 — trước đây chỉ có nhãn "Đã đặt" chung chung, không giờ).
+  const future = busy.filter(iv=>iv.startMs > nowMs).sort((a,b)=>a.startMs-b.startMs);
+  if(future.length){
+    const next = future[0];
+    const in24h = nowMs + 24*3600000;
+    const in3Days = nowMs + 3*24*3600000;
+    if(next.startMs <= in24h){
+      const iso = new Date(next.startMs).toISOString();
+      return {color:'yellow', label:`Đã đặt ${formatTimeVN(iso)} ${formatShortDateVN(iso)}`, nextAvailableMs:null, nextAvailableUnknown:false};
+    }
+    if(next.startMs <= in3Days){
+      return {color:'yellow', label:'Đã đặt', nextAvailableMs:null, nextAvailableUnknown:false};
+    }
+  }
+  return {color:'green', label:'Sẵn sàng', nextAvailableMs:null, nextAvailableUnknown:false};
 }
 
-// Giá gợi ý 1 món theo khoảng thời gian thuê (todo-phase2.md mục 0):
-// tổng thời gian ≤ 8 tiếng và món có rent_price_hour>0 → số giờ × rent_price_hour;
-// ngược lại → ceil(số giờ/24) × rent_price_day.
+// Giá gợi ý 1 món theo khoảng thời gian thuê.
+// audit-phase2 #6: công thức cũ dùng ngưỡng "≤8h thì tính theo giờ, ngược lại theo ngày" không
+// đơn điệu (8h có thể ra giá CAO hơn 8.5h) và món chỉ có giá giờ + thuê nhiều ngày sẽ ra 0đ
+// (vì nhánh ngày dùng rent_price_day=0). SỬA: gợi ý = max(giá theo giờ nếu có rent_price_hour,
+// giá theo ngày nếu có rent_price_day) — max của 2 hàm không giảm nên luôn đơn điệu; nếu món
+// không có giá nào cả thì trả về 0 và bên gọi phải KHÔNG ghi 0 vào ô tiền (hiện cảnh báo thay vì).
 function computeItemSuggestedPrice(item, hours){
-  if(hours <= 8 && Number(item.rent_price_hour) > 0){
-    return Math.round(hours * Number(item.rent_price_hour));
-  }
-  return Math.ceil(hours/24) * Number(item.rent_price_day);
+  const byHour = Number(item.rent_price_hour) > 0 ? Math.round(hours * Number(item.rent_price_hour)) : 0;
+  const byDay = Number(item.rent_price_day) > 0 ? Math.ceil(hours/24) * Number(item.rent_price_day) : 0;
+  return Math.max(byHour, byDay);
 }
 
 // Resize ảnh client-side còn tối đa maxDim px (giữ tỉ lệ) trước khi upload, trả về Blob JPEG.
+// audit-phase2 #11: chặn file gốc quá lớn TRƯỚC KHI decode (tránh treo máy yếu với ảnh siêu to).
+const MAX_ITEM_PHOTO_INPUT_BYTES = 20*1024*1024;
 function resizeImageFile(file, maxDim){
   maxDim = maxDim || 800;
   return new Promise((resolve, reject)=>{
+    if(file.size > MAX_ITEM_PHOTO_INPUT_BYTES){
+      reject(new Error('Ảnh quá lớn (>20MB), chọn ảnh nhỏ hơn'));
+      return;
+    }
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = ()=>{
@@ -872,11 +908,16 @@ function getOrderDatesMsFromForm(pickupId, returnId){
 function itemPickerBlockHtml(idPrefix){
   return `
     <div class="section-title">Món thuê từ kho</div>
+    <div class="hidden" id="${idPrefix}-schedule-ctx-error" style="background:#fff3cd;color:#7a5b00;border:1px solid #ffe08a;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px;">
+      ⚠️ Chưa kiểm tra được lịch — thử lại
+      <button type="button" class="btn ghost block-sm" id="${idPrefix}-schedule-ctx-retry" style="margin-left:6px;">Thử lại</button>
+    </div>
     <div class="item-search-row">
       <input type="text" id="${idPrefix}-item-search" placeholder="Tìm món trong kho theo tên/mã" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:10px;">
     </div>
     <div class="item-search-results" id="${idPrefix}-item-results"></div>
     <div id="${idPrefix}-item-selected"></div>
+    <div class="hidden" id="${idPrefix}-price-suggest-hint" style="font-size:13px;color:var(--muted);margin-bottom:8px;"></div>
     <button type="button" class="btn secondary block-sm" id="${idPrefix}-item-quickadd" style="margin-bottom:10px;">+ Thêm món nhanh</button>
     <div class="hidden" id="${idPrefix}-quickadd-box" style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;">
       <div class="field"><label>Tên món *</label><input type="text" id="${idPrefix}-qa-name"></div>
@@ -915,6 +956,8 @@ function wireItemPickerBlock(opts){
   const depositField = document.getElementById(opts.depositFieldId);
   const quickAddBtn = document.getElementById(`${opts.idPrefix}-item-quickadd`);
   const quickAddBox = document.getElementById(`${opts.idPrefix}-quickadd-box`);
+  const ctxErrorEl = document.getElementById(`${opts.idPrefix}-schedule-ctx-error`);
+  const priceHintEl = document.getElementById(`${opts.idPrefix}-price-suggest-hint`);
 
   priceField.addEventListener('input', ()=>{ state.priceDirty = true; });
   depositField.addEventListener('input', ()=>{ state.depositDirty = true; });
@@ -923,15 +966,36 @@ function wireItemPickerBlock(opts){
     return getOrderDatesMsFromForm(opts.pickupId, opts.returnId);
   }
 
+  function setSaveDisabled(disabled){
+    if(opts.saveBtnSelector){
+      const saveBtn = document.querySelector(opts.saveBtnSelector);
+      if(saveBtn) saveBtn.disabled = disabled;
+    }
+  }
+
+  // audit-phase2 #3: query lỗi (mạng, RLS...) KHÔNG được cache thành context rỗng vĩnh viễn —
+  // bản cũ set {orders:[],orderItems:[]} khi lỗi khiến check trùng tắt âm thầm mãi mãi. Giữ
+  // scheduleCtx=null để còn thử lại, khóa nút Lưu + hiện banner báo lỗi có nút "Thử lại".
   async function ensureScheduleCtx(){
     if(state.scheduleCtx) return state.scheduleCtx;
     const [ordersRes, orderItemsRes] = await Promise.all([
       sb.from('orders').select('id,code,status,pickup_at,return_due_at'),
       sb.from('order_items').select('order_id,item_id')
     ]);
+    if(ordersRes.error || orderItemsRes.error){
+      state.scheduleCtx = null;
+      if(ctxErrorEl) ctxErrorEl.classList.remove('hidden');
+      setSaveDisabled(true);
+      return null;
+    }
+    if(ctxErrorEl) ctxErrorEl.classList.add('hidden');
     state.scheduleCtx = {orders: ordersRes.data||[], orderItems: orderItemsRes.data||[]};
     return state.scheduleCtx;
   }
+  document.getElementById(`${opts.idPrefix}-schedule-ctx-retry`)?.addEventListener('click', async ()=>{
+    await ensureScheduleCtx();
+    recomputeAll();
+  });
 
   function conflictForItem(item){
     const dates = getDatesMs();
@@ -949,9 +1013,14 @@ function wireItemPickerBlock(opts){
       const c = entry.conflict;
       let warnHtml = '';
       if(c && c.reason==='schedule'){
-        warnHtml = `<div class="picked-item-conflict-msg">⚠️ Trùng lịch với ${escapeHtml(c.orderCode||'')}</div>`;
+        warnHtml += `<div class="picked-item-conflict-msg">⚠️ Trùng lịch với ${escapeHtml(c.orderCode||'')}</div>`;
       } else if(c && c.reason==='manual_status'){
-        warnHtml = `<div class="picked-item-conflict-msg">⚠️ Đang ${MANUAL_STATUS_LABEL[c.manualStatus]||c.manualStatus}</div>`;
+        warnHtml += `<div class="picked-item-conflict-msg">⚠️ Đang ${MANUAL_STATUS_LABEL[c.manualStatus]||c.manualStatus}</div>`;
+      }
+      if(entry.priceMissing){
+        // audit-phase2 #6: món không có giá gợi ý (thiếu cả giá ngày lẫn giá giờ) → không tự
+        // điền 0đ vào ô tiền, báo rõ để chủ tiệm nhập tay giá cho món này.
+        warnHtml += `<div class="picked-item-conflict-msg" style="color:#b45309;">⚠️ Món chưa có giá — nhập tay</div>`;
       }
       return `<div class="picked-item-row ${c?'conflict':''}" data-idx="${idx}">
         <div style="flex:1;">
@@ -984,6 +1053,27 @@ function wireItemPickerBlock(opts){
     });
   }
 
+  // audit-phase2 #7: hiện gợi ý "Tổng món: X đ [Áp dụng]" khi tổng giá gợi ý các món khác với
+  // ô tiền thuê hiện tại, thay vì tự ghi đè âm thầm (form sửa đơn khoá priceDirty=true nên trước
+  // đây thêm/bớt món không cập nhật tiền, lệch âm thầm mà không ai biết).
+  function updatePriceSuggestHint(){
+    if(!priceHintEl) return;
+    const total = state.entries.reduce((s,e)=>s+Number(e.price||0),0);
+    const current = parseMoneyInput(priceField.value);
+    if(total > 0 && total !== current){
+      priceHintEl.classList.remove('hidden');
+      priceHintEl.innerHTML = `Tổng gợi ý theo món: ${money(total)} <button type="button" class="btn ghost block-sm" id="${opts.idPrefix}-apply-suggested-price">Áp dụng</button>`;
+      document.getElementById(`${opts.idPrefix}-apply-suggested-price`)?.addEventListener('click', ()=>{
+        priceField.value = total.toLocaleString('vi-VN');
+        state.priceDirty = true;
+        priceHintEl.classList.add('hidden');
+      });
+    } else {
+      priceHintEl.classList.add('hidden');
+      priceHintEl.innerHTML = '';
+    }
+  }
+
   function recomputeAll(){
     const dates = getDatesMs();
     const hours = dates ? (dates.endMs-dates.startMs)/3600000 : 0;
@@ -993,25 +1083,29 @@ function wireItemPickerBlock(opts){
       if(entry.conflict) anyConflict = true;
       if(!entry.priceTouched && dates){
         entry.price = computeItemSuggestedPrice(entry.item, hours);
+        entry.priceMissing = entry.price === 0;
       }
     });
     paintSelected();
     if(!state.priceDirty){
+      // audit-phase2 #6: nếu tổng gợi ý = 0 (món chưa có giá) thì KHÔNG ghi đè ô tiền về rỗng/0 —
+      // giữ nguyên giá trị hiện có, cảnh báo hiện riêng theo từng dòng món (entry.priceMissing).
       const total = state.entries.reduce((s,e)=>s+Number(e.price||0),0);
-      priceField.value = total ? total.toLocaleString('vi-VN') : '';
+      if(total > 0) priceField.value = total.toLocaleString('vi-VN');
     }
+    updatePriceSuggestHint();
     if(!state.depositDirty){
       const totalDep = state.entries.reduce((s,e)=>s+Number(e.item.deposit_value||0),0);
       depositField.value = totalDep ? totalDep.toLocaleString('vi-VN') : '';
     }
-    if(opts.saveBtnSelector){
-      const saveBtn = document.querySelector(opts.saveBtnSelector);
-      if(saveBtn) saveBtn.disabled = anyConflict;
-    }
+    // audit-phase2 #3: ngoài anyConflict, khoá luôn nút Lưu nếu context lịch chưa tải được (lỗi)
+    // — trước đây scheduleCtx lỗi vẫn coi như "không trùng" và cho lưu bình thường.
+    setSaveDisabled(anyConflict || !state.scheduleCtx);
   }
 
   async function tryAddItem(item){
-    await ensureScheduleCtx();
+    const ctx = await ensureScheduleCtx();
+    if(!ctx){ toast('Chưa kiểm tra được lịch — thử lại trước khi thêm món'); return; }
     if(state.entries.some(e=>e.item.id===item.id)){ toast('Món này đã được chọn'); return; }
     const conflict = conflictForItem(item);
     if(conflict){
@@ -1025,7 +1119,7 @@ function wireItemPickerBlock(opts){
     const dates = getDatesMs();
     const hours = dates ? (dates.endMs-dates.startMs)/3600000 : 0;
     const price = dates ? computeItemSuggestedPrice(item, hours) : Number(item.rent_price_day||0);
-    state.entries.push({item, price, priceTouched:false, conflict:null});
+    state.entries.push({item, price, priceTouched:false, priceMissing: price===0, conflict:null});
     searchInput.value = '';
     resultsEl.innerHTML = '';
     recomputeAll();
@@ -1034,10 +1128,20 @@ function wireItemPickerBlock(opts){
   let searchDebounce = null;
   searchInput.addEventListener('input', ()=>{
     clearTimeout(searchDebounce);
-    const term = searchInput.value.trim();
-    if(!term){ resultsEl.innerHTML=''; return; }
+    const rawTerm = searchInput.value.trim();
+    if(!rawTerm){ resultsEl.innerHTML=''; return; }
+    // audit-phase2 #5: bỏ ký tự có thể làm vỡ cú pháp .or()/.ilike() của PostgREST (dấu phẩy,
+    // ngoặc, %, *) — trước đây gõ các ký tự này làm query lỗi, lỗi bị nuốt im lặng, hiện luôn
+    // "Không tìm thấy" khiến chủ tiệm tưởng chưa có món và tạo trùng.
+    const term = rawTerm.replace(/[,()%*]/g, '').trim();
+    if(!term){ resultsEl.innerHTML = `<div class="item-search-result-row">Không tìm thấy</div>`; return; }
     searchDebounce = setTimeout(async ()=>{
-      const {data} = await sb.from('items').select('*').or(`name.ilike.%${term}%,code.ilike.%${term}%`).limit(15);
+      const {data, error} = await sb.from('items').select('*').or(`name.ilike.%${term}%,code.ilike.%${term}%`).limit(15);
+      if(error){
+        resultsEl.innerHTML = `<div class="item-search-result-row">Lỗi tìm kiếm, thử lại</div>`;
+        toast('Lỗi tìm món: '+error.message);
+        return;
+      }
       const list = (data||[]).filter(it=>!state.entries.some(e=>e.item.id===it.id));
       if(!list.length){ resultsEl.innerHTML = `<div class="item-search-result-row">Không tìm thấy</div>`; return; }
       resultsEl.innerHTML = list.map(it=>`<div class="item-search-result-row" data-item-id="${it.id}">${escapeHtml(it.name)} <span style="color:var(--muted);">(${it.code})</span> — ${money(it.rent_price_day)}/ngày</div>`).join('');
@@ -1535,13 +1639,36 @@ async function openEditOrderModal(order, customer){
     }).eq('id', order.id);
     if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
 
-    // Đồng bộ order_items: xóa hết rồi thêm lại đúng danh sách hiện có trên form (đơn giản, tránh lệch diff)
-    const {error: delErr} = await sb.from('order_items').delete().eq('order_id', order.id);
-    if(delErr){ toast('Đã lưu đơn nhưng lỗi đồng bộ món: '+delErr.message); }
-    else if(itemPicker.state.entries.length){
-      const rows = itemPicker.state.entries.map(en=>({order_id:order.id, item_id:en.item.id, price:Number(en.price||0)}));
-      const {error: oiErr} = await sb.from('order_items').insert(rows);
-      if(oiErr){ toast('Đã lưu đơn nhưng lỗi đồng bộ món: '+oiErr.message); }
+    // audit-phase2 #2: đồng bộ order_items bằng DIFF (chỉ xóa món bị bỏ, thêm món mới, cập nhật
+    // giá món đổi) thay vì xóa hết rồi insert lại — bản cũ nếu insert lỗi giữa chừng thì mất SẠCH
+    // snapshot món (kể cả những món không đổi) mà modal vẫn đóng, toast vẫn báo "Đã lưu" (SAI).
+    // Đọc lại order_items MỚI NHẤT từ DB tại đây (không dùng existingOrderItems chụp lúc mở modal,
+    // tránh tính diff trên dữ liệu cũ). Bất kỳ bước nào lỗi → GIỮ MODAL MỞ, giữ nguyên state đã
+    // chọn, toast lỗi rõ ràng, KHÔNG closeModal, để người dùng có thể bấm Lưu lại ngay.
+    const {data: freshOrderItems, error: fetchErr} = await sb.from('order_items').select('item_id, price').eq('order_id', order.id);
+    if(fetchErr){ toast('Lỗi đọc dữ liệu món hiện tại, chưa lưu món — thử lại: '+fetchErr.message); btn.disabled = false; return; }
+
+    const existingMap = new Map((freshOrderItems||[]).map(oi=>[oi.item_id, oi]));
+    const currentIds = new Set(itemPicker.state.entries.map(en=>en.item.id));
+    const idsToDelete = [...existingMap.keys()].filter(id=>!currentIds.has(id));
+    const entriesToInsert = itemPicker.state.entries.filter(en=>!existingMap.has(en.item.id));
+    const entriesToUpdate = itemPicker.state.entries.filter(en=>{
+      const ex = existingMap.get(en.item.id);
+      return ex && Number(ex.price) !== Number(en.price||0);
+    });
+
+    if(idsToDelete.length){
+      const {error: delErr} = await sb.from('order_items').delete().eq('order_id', order.id).in('item_id', idsToDelete);
+      if(delErr){ toast('Lỗi đồng bộ món (xóa món bị bỏ): '+delErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
+    }
+    if(entriesToInsert.length){
+      const rows = entriesToInsert.map(en=>({order_id:order.id, item_id:en.item.id, price:Number(en.price||0)}));
+      const {error: insErr} = await sb.from('order_items').insert(rows);
+      if(insErr){ toast('Lỗi đồng bộ món (thêm món mới): '+insErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
+    }
+    for(const en of entriesToUpdate){
+      const {error: updErr} = await sb.from('order_items').update({price:Number(en.price||0)}).eq('order_id', order.id).eq('item_id', en.item.id);
+      if(updErr){ toast('Lỗi đồng bộ món (cập nhật giá): '+updErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
     }
 
     closeModal(); toast('Đã lưu');
@@ -1628,7 +1755,9 @@ function paintItemGrid(items, orders, orderItems){
   gridEl.innerHTML = `<div class="item-grid">` + filtered.map(it=>{
     const status = computeItemStatus(it, orders, orderItems, nowMs);
     const thumb = it.photo_url ? `<img src="${escapeHtml(it.photo_url)}" alt="">` : (CATEGORY_EMOJI[it.category]||'📦');
-    const availLine = status.nextAvailableMs ? `<div class="item-avail">Có lại: ${formatShortDateVN(new Date(status.nextAvailableMs).toISOString())}</div>` : '';
+    const availLine = status.nextAvailableUnknown
+      ? `<div class="item-avail">Chưa rõ ngày có lại (khách chưa trả đồ)</div>`
+      : (status.nextAvailableMs ? `<div class="item-avail">Có lại: ${formatShortDateVN(new Date(status.nextAvailableMs).toISOString())}</div>` : '');
     return `<button type="button" class="item-card" data-item-id="${it.id}">
       <div class="thumb">${thumb}</div>
       <div class="info">
@@ -1715,7 +1844,9 @@ function wireItemForm(idPrefix, existingItem, onDone){
       deposit_value: parseMoneyInput(document.getElementById(`${idPrefix}-deposit`).value),
       replace_value: parseMoneyInput(document.getElementById(`${idPrefix}-replace`).value),
       cost_price: parseMoneyInput(document.getElementById(`${idPrefix}-cost`).value),
-      buffer_hours: parseInt(document.getElementById(`${idPrefix}-buffer`).value, 10) || 0,
+      // audit-phase2 #4: chặn buffer âm lọt qua client (parseInt('-5')||0 = -5, vẫn "truthy" nên
+      // lọt qua || 0) — ép về tối thiểu 0. Migration đi kèm thêm CHECK constraint ở DB.
+      buffer_hours: Math.max(0, parseInt(document.getElementById(`${idPrefix}-buffer`).value, 10) || 0),
       note: document.getElementById(`${idPrefix}-note`).value.trim() || null
     };
     btn.disabled = true;
@@ -1755,7 +1886,9 @@ async function openItemDetail(itemId){
   const {data: oiRows} = await sb.from('order_items').select('*, orders(id,code,status,pickup_at,return_due_at)').eq('item_id', itemId);
   const rows = oiRows || [];
 
-  const activeRows = rows.filter(r=>r.orders && r.orders.status !== 'cancelled');
+  // audit-phase2 #13: chỉ tính đơn đã THỰC SỰ diễn ra (đã giao đồ trở đi) vào lượt thuê/doanh thu —
+  // đơn 'booked' chưa diễn ra (có thể còn bị hủy) không được tính vào thống kê hoàn vốn.
+  const activeRows = rows.filter(r=>r.orders && ['picked_up','returned','closed'].includes(r.orders.status));
   const rentalCount = activeRows.length;
   const revenue = activeRows.reduce((s,r)=>s+Number(r.price),0);
   const costPrice = Number(item.cost_price||0);
@@ -1799,7 +1932,7 @@ async function openItemDetail(itemId){
     ${upcomingBusy.length ? upcomingBusy.map(iv=>`
       <div class="busy-row" data-order-id="${iv.orderId}">
         <span>${iv.orderCode}</span>
-        <span>${formatDateTimeVN(new Date(iv.startMs).toISOString())} → ${formatDateTimeVN(new Date(iv.endMs).toISOString())}</span>
+        <span>${formatDateTimeVN(new Date(iv.startMs).toISOString())} → ${iv.endMs===Infinity?'chưa rõ (chưa trả đồ)':formatDateTimeVN(new Date(iv.endMs).toISOString())}</span>
       </div>`).join('') : `<div class="empty-state">Không có lịch bận trong 14 ngày tới</div>`}
 
     <div class="section-title">Thống kê</div>
@@ -1831,6 +1964,12 @@ async function openItemDetail(itemId){
     btn.disabled = true;
     const {error} = await sb.from('items').delete().eq('id', itemId);
     if(error){ toast('Lỗi xóa (có thể đã có lịch sử): '+error.message); btn.disabled = false; return; }
+    // audit-phase2 #10: xóa món xong thì dọn luôn ảnh trong bucket (tên file cố định {item_id}.jpg)
+    // — không chặn việc báo "đã xóa" nếu lỡ lỗi xóa ảnh (món đã xóa khỏi DB rồi, không hoàn tác được).
+    if(item.photo_url){
+      const {error: rmErr} = await sb.storage.from('item-photos').remove([`${itemId}.jpg`]);
+      if(rmErr){ toast('Đã xóa món (ảnh trong kho lưu trữ có thể chưa xóa hết: '+rmErr.message+')'); closeModal(); if(currentTab==='kho') renderKho(); return; }
+    }
     closeModal(); toast('Đã xóa món');
     if(currentTab==='kho') renderKho();
   });
