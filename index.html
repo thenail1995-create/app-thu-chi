@@ -495,12 +495,18 @@ function depositHeld(order){
  * itemBusyIntervals(item, orders, orderItems, nowMs) -> [{startMs, endMs, orderId, orderCode}]
  * Nguồn: các đơn status 'booked' hoặc 'picked_up' có chứa item đó (qua bảng order_items).
  * Mỗi đơn sinh 1 interval [pickup_at, effectiveEnd + buffer_hours]:
- *   - effectiveEnd = return_due_at   (đơn booked)
- *   - effectiveEnd = Infinity        (đơn picked_up CHƯA TRẢ — bận VÔ HẠN cho tới khi đổi status
- *                                     sang returned/closed; không hứa lịch cho ai khi chưa biết
- *                                     bao giờ khách trả đồ. Audit-phase2 #1: bản cũ dùng
- *                                     max(due, now) khiến khách quá hạn + buffer 0 vẫn hiện "sẵn
- *                                     sàng" và cho đặt đè ngay sau 1 phút — SAI.)
+ *   - effectiveEnd = return_due_at   (đơn booked; hoặc đơn picked_up NHƯNG CÒN TRONG HẠN, tức
+ *                                     dueMs >= nowMs — khách đang giữ đồ đúng hạn không bị chặn
+ *                                     đặt trước vĩnh viễn, buffer cộng sau như thường)
+ *   - effectiveEnd = Infinity        (đơn picked_up THỰC SỰ QUÁ HẠN, tức dueMs < nowMs — bận VÔ
+ *                                     HẠN cho tới khi đổi status sang returned/closed, không hứa
+ *                                     lịch cho ai khi chưa biết bao giờ khách trả đồ.
+ *                                     Audit-phase2 #1: bản cũ dùng max(due,now) khiến khách quá
+ *                                     hạn + buffer 0 vẫn hiện "sẵn sàng" — SAI.
+ *                                     Audit-batch-UX-1 #1: bản kế tiếp áp Infinity cho MỌI đơn
+ *                                     picked_up kể cả còn trong hạn — cũng SAI, chặn đặt trước
+ *                                     vĩnh viễn cả khi khách chưa hề trễ hẹn. Sửa lại: chỉ quá
+ *                                     hạn thật mới vô hạn.)
  * Đơn returned/closed/cancelled KHÔNG sinh interval (không chặn lịch), kể cả nếu buffer của
  * lần thuê đó còn "trong hạn giặt" — trạng thái chờ giặt thể hiện qua manual_status, không qua lịch.
  * buffer_hours âm (dữ liệu xấu lọt qua, lẽ ra bị chặn ở input/DB constraint — audit #4) được tự vệ
@@ -510,7 +516,8 @@ function depositHeld(order){
  * 1. Hai đơn cùng ngày khác giờ, buffer 0 (props): 8-11h và 13-17h → KHÔNG trùng; 8-11h và 10-14h → TRÙNG.
  * 2. Buffer 24h: đơn A trả 17h ngày 5 → đơn B nhận 10h ngày 6 → TRÙNG (còn trong buffer); nhận 18h ngày 6 → KHÔNG trùng.
  * 3. Đơn qua đêm nhiều ngày.
- * 4. Đơn picked_up CHƯA TRẢ → bận VÔ HẠN (endMs=Infinity) bất kể return_due_at đã qua hay chưa.
+ * 4. Đơn picked_up QUÁ HẠN thật (dueMs<nowMs) → bận VÔ HẠN (endMs=Infinity); picked_up ĐÚNG HẠN
+ *    (dueMs>=nowMs) → bận tới due+buffer như đơn booked, đặt sau mốc đó ĐƯỢC.
  * 5. Sửa đơn: đổi giờ của chính đơn đang sửa không tự báo trùng với chính nó (excludeOrderId).
  * 6. Chạm mép: A kết thúc (kể cả buffer) đúng 14:00, B bắt đầu 14:00 → không trùng.
  * 7. Đơn cancelled/returned không chặn.
@@ -526,7 +533,9 @@ function itemBusyIntervals(item, orders, orderItems, nowMs){
     if(o.status !== 'booked' && o.status !== 'picked_up') continue;
     const pickupMs = new Date(o.pickup_at).getTime();
     const dueMs = new Date(o.return_due_at).getTime();
-    const effectiveEnd = o.status === 'picked_up' ? Infinity : dueMs;
+    // Audit-batch-UX-1 #1: picked_up chỉ bận VÔ HẠN khi THỰC SỰ quá hạn (dueMs<nowMs); còn trong
+    // hạn thì effectiveEnd = dueMs như đơn booked, buffer cộng sau như thường.
+    const effectiveEnd = (o.status === 'picked_up' && dueMs < nowMs) ? Infinity : dueMs;
     const bufferMs = Math.max(0, Number(item.buffer_hours||0)) * 3600000;
     const endMs = effectiveEnd === Infinity ? Infinity : effectiveEnd + bufferMs;
     result.push({startMs: pickupMs, endMs, orderId: o.id, orderCode: o.code});
@@ -637,9 +646,24 @@ function computeItemStatusForDate(item, orders, orderItems, dateStr){
   const isToday = dateStr === vnDateStr();
   const busy = itemBusyIntervals(item, orders, orderItems, nowMs);
 
-  if(item.manual_status !== 'ok'){
+  // Audit-batch-UX-1 #4: 'hong'/'nghi' luôn chặn mọi ngày (hỏng/ngưng cho thuê không tự hết hạn).
+  // 'giat'/'sua' chỉ phản ánh tình trạng HÔM NAY — ngày TƯƠNG LAI tính theo lịch như bình thường
+  // (món sẽ giặt/sửa xong trước đó), chỉ kèm chú thích nhỏ chứ không chặn.
+  const manualBlocksAlways = item.manual_status==='hong' || item.manual_status==='nghi';
+  const manualIsTemporary = item.manual_status==='giat' || item.manual_status==='sua';
+
+  if(manualBlocksAlways){
     const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
     const currentlyBusyNow = isToday && busy.some(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
+    return {
+      color:'gray',
+      label: currentlyBusyNow ? `${baseLabel} (đang thuê)` : baseLabel,
+      nextAvailableMs:null, nextAvailableUnknown:false
+    };
+  }
+  if(manualIsTemporary && isToday){
+    const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
+    const currentlyBusyNow = busy.some(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
     return {
       color:'gray',
       label: currentlyBusyNow ? `${baseLabel} (đang thuê)` : baseLabel,
@@ -670,14 +694,17 @@ function computeItemStatusForDate(item, orders, orderItems, dateStr){
   }
 
   // Ngày khác hôm nay: hỏi checkConflict xem cả ngày [00:00,24:00) giờ VN có đụng lịch không.
+  // 'giat'/'sua' KHÔNG được truyền vào để chặn ở đây (coi như 'ok'), chỉ 'hong'/'nghi' mới chặn
+  // (đã return sớm ở nhánh manualBlocksAlways phía trên nên tới đây chắc chắn không phải 2 loại đó).
+  const noteSuffix = manualIsTemporary ? ` (hôm nay đang ${item.manual_status==='giat'?'giặt':'sửa'})` : '';
   const {startISO, endISO} = vnDayRange(dateStr);
   const dayStartMs = new Date(startISO).getTime();
   const dayEndMs = new Date(endISO).getTime();
-  const conflict = checkConflict(item.id, dayStartMs, dayEndMs, item.buffer_hours, busy, null, item.manual_status);
+  const conflict = checkConflict(item.id, dayStartMs, dayEndMs, item.buffer_hours, busy, null, 'ok');
   if(conflict){
-    return {color:'yellow', label:'Đã có người đặt ngày này', nextAvailableMs:null, nextAvailableUnknown:false};
+    return {color:'yellow', label:'Vướng lịch (kể cả giờ nghỉ giặt)'+noteSuffix, nextAvailableMs:null, nextAvailableUnknown:false};
   }
-  return {color:'green', label:'Còn trống ngày này', nextAvailableMs:null, nextAvailableUnknown:false};
+  return {color:'green', label:'Còn trống ngày này'+noteSuffix, nextAvailableMs:null, nextAvailableUnknown:false};
 }
 
 // Giá gợi ý 1 món theo khoảng thời gian thuê.
@@ -1274,7 +1301,12 @@ function wireItemPickerBlock(opts){
     const dates = getDatesMs();
     if(!dates || !state.scheduleCtx) return null;
     const busy = itemBusyIntervals(item, state.scheduleCtx.orders, state.scheduleCtx.orderItems, Date.now());
-    return checkConflict(item.id, dates.startMs, dates.endMs, item.buffer_hours, busy, opts.excludeOrderId, item.manual_status);
+    // Audit-batch-UX-1 #4: 'giat'/'sua' chỉ chặn nếu khoảng đặt bắt đầu trong 24h tới (hoặc đã bắt
+    // đầu); đặt xa hơn 24h thì coi như 'ok' (đủ thời gian giặt/sửa xong trước đó). 'hong'/'nghi' luôn chặn.
+    const isTemporaryManual = item.manual_status==='giat' || item.manual_status==='sua';
+    const startsFarFuture = dates.startMs > Date.now() + 24*3600000;
+    const effectiveManualStatus = (isTemporaryManual && startsFarFuture) ? 'ok' : item.manual_status;
+    return checkConflict(item.id, dates.startMs, dates.endMs, item.buffer_hours, busy, opts.excludeOrderId, effectiveManualStatus);
   }
 
   function paintSelected(){
@@ -1728,16 +1760,18 @@ async function openOrderDetail(orderId){
     const btn = box.querySelector('[data-act="revert-to-booked"]');
     btn.disabled = true;
     // Heuristic: không có cột liên kết trực tiếp giao dịch với flow đã tạo ra nó trong schema hiện
-    // tại → coi khoản thu tien_thue GẦN NHẤT (orderTx đã sắp occurred_at giảm dần) là khoản ghi khi
-    // giao đồ. Đúng với xác suất rất cao vì revert thường bấm ngay sau khi lỡ tay.
+    // tại → coi khoản thu tien_thue CŨ NHẤT (orderTx đã sắp occurred_at GIẢM DẦN nên khoản cũ nhất
+    // là phần tử CUỐI mảng) là khoản ghi khi giao đồ — đây là khoản thu ĐẦU TIÊN của đơn, ghi ngay
+    // lúc giao đồ; các khoản thu sau đó (vd "Thu nốt") mới là gần nhất. Audit-batch-UX-1 #2: bản
+    // trước lấy nhầm thueTx[0] (gần nhất) thay vì thueTx[length-1] (cũ nhất).
     const thueTx = orderTx.filter(t=>t.type==='thu' && t.category==='tien_thue');
-    const latestThueTx = thueTx.length ? thueTx[0] : null;
+    const oldestThueTx = thueTx.length ? thueTx[thueTx.length-1] : null;
     let deleteTx = false;
-    if(latestThueTx){
-      deleteTx = confirm(`Xóa luôn khoản thu ${money(latestThueTx.amount)} đã ghi khi giao đồ? OK = Xóa, Cancel = Giữ lại.`);
+    if(oldestThueTx){
+      deleteTx = confirm(`Xóa luôn khoản thu ${money(oldestThueTx.amount)} lúc ${formatDateTimeVN(oldestThueTx.occurred_at)} đã ghi khi giao đồ? OK = Xóa, Cancel = Giữ lại.`);
     }
     if(deleteTx){
-      const {error: delErr} = await sb.from('transactions').delete().eq('id', latestThueTx.id);
+      const {error: delErr} = await sb.from('transactions').delete().eq('id', oldestThueTx.id);
       if(delErr){ toast('Lỗi xóa giao dịch: '+viError(delErr), 4000); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({status:'booked'}).eq('id', order.id);
@@ -1765,9 +1799,11 @@ async function openOrderDetail(orderId){
     if(currentTab==='orders') renderOrders(); else renderToday();
   });
   box.querySelector('[data-act="reopen-to-booked"]')?.addEventListener('click', async ()=>{
-    const hasPhiHuy = orderTx.some(t=>t.category==='phi_huy');
-    const msg = hasPhiHuy
-      ? 'Mở lại đơn (về trạng thái "đã đặt")? Đơn này từng có khoản "Phí hủy" — vào tab Thu chi để tự xử lý giao dịch đó nếu cần. Kiểm tra lại phần cọc và giao dịch nếu cần sửa.'
+    // Audit-batch-UX-1 #7: cảnh báo phi_huy nêu rõ số tiền + ngày của giao dịch đó (đọc từ orderTx
+    // có sẵn, không cần link phức tạp) thay vì chỉ nói chung chung "từng có khoản Phí hủy".
+    const phiHuyTx = orderTx.find(t=>t.category==='phi_huy');
+    const msg = phiHuyTx
+      ? `Mở lại đơn (về trạng thái "đã đặt")? Đơn này từng có khoản "Phí hủy" ${money(phiHuyTx.amount)} lúc ${formatDateTimeVN(phiHuyTx.occurred_at)} — vào tab Thu chi để tự xử lý giao dịch đó nếu cần. Kiểm tra lại phần cọc và giao dịch nếu cần sửa.`
       : 'Mở lại đơn (về trạng thái "đã đặt")? Kiểm tra lại phần cọc và giao dịch nếu cần sửa.';
     if(!confirm(msg)) return;
     const btn = box.querySelector('[data-act="reopen-to-booked"]');
@@ -1936,31 +1972,58 @@ async function proceedAfterReturn(order, orderItemsList, onDone){
 function flowReturnDeposit(order, remaining, onDone){
   // Cảnh báo nếu đơn còn thiếu tiền thuê trước khi hoàn cọc (finding #16)
   const warnHtml = remaining > 0 ? `<p class="remain-warn">⚠️ Đơn còn thiếu ${money(remaining)}</p>` : '';
-  const deposit = Number(order.deposit_amount);
-  // B2: mặc định hoàn = cọc − còn thiếu (không âm) khi đơn còn thiếu tiền thuê; không thiếu thì hoàn đủ cọc như cũ.
-  const defaultRefund = remaining > 0 ? Math.max(deposit - remaining, 0) : deposit;
+  const alreadyReturned = Number(order.deposit_returned_amount || 0);
+  // Audit-batch-UX-1 #3: dùng CỌC CÒN GIỮ (deposit_amount − phần đã hoàn trước đó) thay vì
+  // deposit_amount toàn phần — tránh đếm trùng khi mở lại đơn closed rồi hoàn cọc lần 2 (A5).
+  const deposit = Number(order.deposit_amount) - alreadyReturned;
+
+  if(deposit <= 0){
+    openModal(`
+      <h3>Hoàn cọc</h3>
+      <p>Đơn <b>${order.code}</b> — Cọc đã hoàn đủ trước đó (${money(alreadyReturned)}${order.deposit_returned_at ? ' lúc '+formatDateTimeVN(order.deposit_returned_at) : ''}).</p>
+      ${warnHtml}
+      <div class="modal-actions"><button class="btn" id="btn-confirm-close-only">Đóng đơn</button></div>
+    `);
+    document.getElementById('btn-confirm-close-only').addEventListener('click', async ()=>{
+      const btn = document.getElementById('btn-confirm-close-only');
+      btn.disabled = true;
+      const {error} = await sb.from('orders').update({status:'closed'}).eq('id', order.id);
+      if(error){ toastError(error); btn.disabled = false; return; }
+      closeModal(); toast('Đã đóng đơn'); onDone();
+    });
+    return;
+  }
+
+  // B2: mặc định hoàn = cọc còn giữ − còn thiếu (không âm) khi đơn còn thiếu tiền thuê; không thiếu thì hoàn đủ cọc còn giữ.
+  function computeDefaultRefund(deduct){
+    return (remaining > 0 && deduct) ? Math.max(deposit - remaining, 0) : deposit;
+  }
   const deductCheckboxHtml = remaining > 0
     ? `<div class="field"><label><input type="checkbox" id="f-deduct-rent" checked> Trừ ${money(Math.min(remaining, deposit))} tiền thuê còn thiếu vào cọc</label></div>`
     : '';
   openModal(`
     <h3>Hoàn cọc</h3>
-    <p>Đơn <b>${order.code}</b> — cọc: ${money(deposit)}</p>
+    <p>Đơn <b>${order.code}</b> — Cọc còn giữ: ${money(deposit)}</p>
     ${warnHtml}
     ${deductCheckboxHtml}
-    <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${defaultRefund.toLocaleString('vi-VN')}"></div>
+    <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${computeDefaultRefund(true).toLocaleString('vi-VN')}"></div>
     <div class="field"><label>Lý do (bắt buộc nếu giữ thêm tiền ngoài phần trừ nợ tiền thuê)</label><textarea id="f-refund-reason"></textarea></div>
     <div class="modal-actions"><button class="btn" id="btn-confirm-refund">Xác nhận hoàn cọc & đóng đơn</button></div>
   `);
   attachMoneyFormatting(document.getElementById('f-refund'));
+  // Audit-batch-UX-1 #6: đổi trạng thái checkbox → recalc lại mặc định ô "Số tiền hoàn".
+  document.getElementById('f-deduct-rent')?.addEventListener('change', (e)=>{
+    document.getElementById('f-refund').value = computeDefaultRefund(e.target.checked).toLocaleString('vi-VN');
+  });
   document.getElementById('btn-confirm-refund').addEventListener('click', async ()=>{
     const btn = document.getElementById('btn-confirm-refund');
     const refund = parseMoneyInput(document.getElementById('f-refund').value);
     const reason = document.getElementById('f-refund-reason').value.trim();
     const deductRentChecked = remaining > 0 && !!document.getElementById('f-deduct-rent')?.checked;
-    if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
+    if(refund > deposit){ toast('Không thể hoàn nhiều hơn cọc còn giữ'); return; }
     const diff = deposit - refund;
-    // B2: phần trừ khỏi cọc (diff) tách làm 2 — trước hết bù tiền thuê còn thiếu (ghi tien_thue,
-    // tối đa = min(còn thiếu, diff)), phần dư ra (nếu có, do hư hỏng...) vẫn ghi tien_den như cũ.
+    // B2: phần trừ khỏi cọc còn giữ (diff) tách làm 2 — trước hết bù tiền thuê còn thiếu (ghi
+    // tien_thue, tối đa = min(còn thiếu, diff)), phần dư ra (nếu có, do hư hỏng...) vẫn ghi tien_den như cũ.
     const deductedForRent = deductRentChecked ? Math.min(remaining, diff) : 0;
     const deductedForDamage = diff - deductedForRent;
     if(deductedForDamage > 0 && !reason){ toast('Nhập lý do khi giữ thêm tiền ngoài phần trừ nợ tiền thuê'); return; }
@@ -1979,8 +2042,10 @@ function flowReturnDeposit(order, remaining, onDone){
       });
       if(txErr2){ toastError(txErr2); btn.disabled = false; return; }
     }
+    // Audit-batch-UX-1 #3: CỘNG DỒN vào phần đã hoàn trước đó (không ghi đè) — đúng khi đây là
+    // lần hoàn cọc thứ 2 trở lên sau khi mở lại đơn closed.
     const {error} = await sb.from('orders').update({
-      deposit_returned_amount: refund,
+      deposit_returned_amount: alreadyReturned + refund,
       deposit_returned_at: new Date().toISOString(),
       status: 'closed'
     }).eq('id', order.id);
