@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Thu Chi Tiệm Thuê</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --accent:#a6215a;
+    --accent-light:#f5e3ec;
+    --bg:#f7f5f6;
+    --card:#ffffff;
+    --text:#232023;
+    --muted:#767077;
+    --danger:#c0392b;
+    --danger-bg:#fdeceb;
+    --ok:#1f8a53;
+    --border:#e6e0e3;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .hidden{display:none !important;}
+  input,textarea,select,button{font-family:inherit;font-size:16px;}
+  button{cursor:pointer;}
+
+  /* ---------- Login ---------- */
+  #login-screen{
+    min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    align-items:center;padding:24px;
+  }
+  #login-screen h1{font-size:22px;margin-bottom:4px;text-align:center;}
+  #login-screen p.sub{color:var(--muted);margin-top:0;margin-bottom:24px;text-align:center;}
+  .login-box{width:100%;max-width:360px;background:var(--card);border-radius:var(--radius);
+    padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.06);}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px;}
+  .field input,.field textarea,.field select{
+    width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff;
+  }
+  .field textarea{resize:vertical;min-height:64px;}
+  .btn{
+    display:inline-block;border:none;border-radius:10px;padding:12px 18px;font-weight:600;
+    background:var(--accent);color:#fff;width:100%;text-align:center;
+  }
+  .btn:active{opacity:.85;}
+  .btn.secondary{background:#fff;color:var(--accent);border:1.5px solid var(--accent);}
+  .btn.ghost{background:transparent;color:var(--accent);width:auto;padding:8px 10px;}
+  .btn.danger{background:var(--danger);}
+  .btn.block-sm{padding:10px 14px;font-size:14px;}
+  #login-error{color:var(--danger);font-size:13px;margin-top:8px;min-height:16px;}
+
+  /* ---------- App shell ---------- */
+  #app-screen{min-height:100vh;display:flex;flex-direction:column;}
+  #topbar{
+    background:var(--accent);color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-top,0px));
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5;
+  }
+  #topbar .title{font-weight:700;font-size:17px;}
+  #topbar .logout{background:transparent;border:none;color:#fff;font-size:13px;text-decoration:underline;}
+  #tab-content{flex:1;padding:12px 12px 90px 12px;max-width:640px;margin:0 auto;width:100%;}
+  #bottom-nav{
+    position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);
+    display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:10;
+  }
+  #bottom-nav button{
+    flex:1;background:none;border:none;padding:10px 4px 8px;color:var(--muted);font-size:12px;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+  }
+  #bottom-nav button .ic{font-size:20px;}
+  #bottom-nav button.active{color:var(--accent);font-weight:700;}
+
+  /* ---------- Cards / lists ---------- */
+  .card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;
+    box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .section-title{font-size:15px;font-weight:700;margin:18px 0 8px;color:var(--text);}
+  .section-title:first-child{margin-top:0;}
+  .summary-row{display:flex;gap:8px;margin-bottom:4px;}
+  .summary-item{flex:1;background:var(--card);border-radius:12px;padding:10px;text-align:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .summary-item .lbl{font-size:11px;color:var(--muted);}
+  .summary-item .val{font-size:15px;font-weight:700;margin-top:2px;}
+
+  .order-card{display:flex;flex-direction:column;gap:4px;}
+  .order-card .row1{display:flex;justify-content:space-between;align-items:baseline;}
+  .order-card .name{font-weight:700;}
+  .order-card .time{font-weight:700;color:var(--accent);}
+  .order-card .items{color:var(--muted);font-size:14px;}
+  .order-card .meta{font-size:13px;color:var(--muted);}
+  .order-card .actions{display:flex;gap:8px;margin-top:8px;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+  .badge.booked{background:#e8eef7;color:#2b5fad;}
+  .badge.picked_up{background:#fff3d6;color:#9a6b00;}
+  .badge.returned{background:#e6f3ec;color:#1f8a53;}
+  .badge.closed{background:#eee;color:#555;}
+  .badge.cancelled{background:var(--danger-bg);color:var(--danger);}
+  .overdue-card{border:1.5px solid var(--danger);}
+  .overdue-card .time{color:var(--danger);}
+  .overdue-tag{color:var(--danger);font-weight:700;font-size:13px;}
+  a.tel-link{color:var(--accent);text-decoration:none;font-weight:600;}
+
+  .empty-state{color:var(--muted);text-align:center;padding:20px 0;font-size:14px;}
+
+  /* ---------- Fab buttons ---------- */
+  .fab-row{display:flex;gap:10px;margin-bottom:14px;}
+  .fab-row .btn{padding:16px;font-size:16px;}
+  .btn.thu{background:var(--ok);}
+  .btn.chi{background:var(--danger);}
+
+  /* ---------- Filters ---------- */
+  .filter-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .filter-row select,.filter-row input[type=text]{
+    flex:1;min-width:100px;padding:9px;border:1px solid var(--border);border-radius:10px;
+  }
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;}
+  .chip{padding:8px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:13px;}
+  .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+  /* ---------- Transaction row ---------- */
+  .tx-day-group{margin-bottom:10px;}
+  .tx-day-label{font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 4px;}
+  .tx-row{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+    border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+  .tx-row .cat{font-size:13px;color:var(--muted);}
+  .tx-row .amt.thu{color:var(--ok);font-weight:700;}
+  .tx-row .amt.chi{color:var(--danger);font-weight:700;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;
+    justify-content:center;z-index:50;
+  }
+  .modal-box{
+    background:#fff;border-radius:18px 18px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px));
+    width:100%;max-width:480px;max-height:88vh;overflow-y:auto;
+  }
+  .modal-box h3{margin-top:0;}
+  .modal-actions{display:flex;gap:10px;margin-top:16px;}
+  .close-x{position:absolute;top:10px;right:16px;background:none;border:none;font-size:20px;color:var(--muted);}
+  .modal-box{position:relative;}
+
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .kv .k{color:var(--muted);}
+  .kv .v{font-weight:600;text-align:right;}
+  .remain-warn{color:var(--danger);font-weight:700;}
+  .toast{
+    position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#232023;color:#fff;
+    padding:10px 18px;border-radius:10px;font-size:14px;z-index:100;opacity:0;transition:opacity .2s;
+    pointer-events:none;max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;}
+  table.report-table{width:100%;border-collapse:collapse;font-size:14px;}
+  table.report-table th,table.report-table td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;}
+  table.report-table td.amt{text-align:right;}
+  .loading{text-align:center;color:var(--muted);padding:20px;font-size:14px;}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <h1>Thu Chi Tiệm Thuê</h1>
+  <p class="sub">Đăng nhập để tiếp tục</p>
+  <div class="login-box">
+    <form id="login-form">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Mật khẩu</label>
+        <input type="password" id="login-password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn">Đăng nhập</button>
+      <div id="login-error"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app-screen" class="hidden">
+  <div id="topbar">
+    <div class="title" id="topbar-title">Hôm nay</div>
+    <button class="logout" id="logout-btn">Đăng xuất</button>
+  </div>
+  <main id="tab-content"></main>
+  <nav id="bottom-nav">
+    <button data-tab="today"><span class="ic">🏠</span>Hôm nay</button>
+    <button data-tab="orders"><span class="ic">📋</span>Đơn thuê</button>
+    <button data-tab="cashflow"><span class="ic">💵</span>Thu chi</button>
+    <button data-tab="report"><span class="ic">📊</span>Báo cáo</button>
+  </nav>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const SUPABASE_URL = 'https://ttnfrnlsgmfmqcframzy.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0bmZybmxzZ21mbXFjZnJhbXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NTU4ODIsImV4cCI6MjEwMTMzMTg4Mn0.yakuebMT8kCDuiODxCIiTXeq7nMjvJ2jh8dn3xtW7BA';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CATS_THU = [
+  ['tien_thue','Tiền thuê'],['phi_tre','Phí trễ'],['tien_den','Tiền đền'],
+  ['phi_huy','Phí hủy'],['phu_thu_ship','Phụ thu ship'],['khac','Khác']
+];
+const CATS_CHI = [
+  ['nhap_do','Nhập đồ'],['giat_ui','Giặt ủi'],['sua_chua','Sửa chữa'],
+  ['mat_bang','Mặt bằng'],['marketing','Marketing'],['ship','Ship'],['khac','Khác']
+];
+const CAT_LABEL = Object.fromEntries([...CATS_THU,...CATS_CHI]);
+const STATUS_LABEL = {booked:'Đã đặt',picked_up:'Khách đang giữ đồ',returned:'Đã trả đồ',closed:'Hoàn tất',cancelled:'Đã hủy'};
+const DEPOSIT_LABEL = {cash:'Tiền mặt',cccd:'CCCD',cash_cccd:'Tiền mặt + CCCD',none:'Không cọc'};
+
+let currentTab = 'today';
+let currentUser = null;
+
+/* ============================================================
+   UTIL: tiền tệ + thời gian (múi giờ Asia/Ho_Chi_Minh, UTC+7 cố định)
+   ============================================================ */
+function money(n){
+  n = Math.round(Number(n) || 0);
+  return n.toLocaleString('vi-VN') + ' đ';
+}
+function parseMoneyInput(str){
+  const digits = String(str||'').replace(/[^0-9]/g,'');
+  return digits ? parseInt(digits,10) : 0;
+}
+function attachMoneyFormatting(input){
+  input.addEventListener('input', ()=>{
+    const raw = parseMoneyInput(input.value);
+    input.value = raw ? raw.toLocaleString('vi-VN') : '';
+  });
+}
+
+// yyyy-mm-dd của "hôm nay" theo giờ VN
+function vnDateStr(d = new Date()){
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+}
+// Khoảng [start,end) UTC ISO cho 1 ngày VN (yyyy-mm-dd)
+function vnDayRange(dateStr){
+  const start = new Date(dateStr + 'T00:00:00+07:00');
+  const end = new Date(start.getTime() + 24*3600*1000);
+  return {startISO:start.toISOString(), endISO:end.toISOString()};
+}
+// Khoảng [start,end) UTC ISO cho 1 tháng VN (yyyy-mm)
+function vnMonthRange(yearMonthStr){
+  const [y,m] = yearMonthStr.split('-').map(Number);
+  const start = new Date(`${yearMonthStr}-01T00:00:00+07:00`);
+  const nextY = m===12 ? y+1 : y;
+  const nextM = m===12 ? 1 : m+1;
+  const end = new Date(`${nextY}-${String(nextM).padStart(2,'0')}-01T00:00:00+07:00`);
+  return {startISO:start.toISOString(), endISO:end.toISOString()};
+}
+function currentVnYearMonth(){
+  return vnDateStr().slice(0,7);
+}
+// datetime-local input value ("yyyy-MM-ddTHH:mm") -> ISO, hiểu là giờ VN
+function vnLocalInputToISO(value){
+  if(!value) return null;
+  return new Date(value + ':00+07:00').toISOString();
+}
+// ISO -> giá trị cho input datetime-local, hiển thị theo giờ VN
+function isoToVnLocalInput(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat('en-CA',{
+    timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hour12:false
+  }).formatToParts(d);
+  const p = Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+function formatDateTimeVN(iso){
+  if(!iso) return '';
+  return new Intl.DateTimeFormat('vi-VN',{
+    timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'
+  }).format(new Date(iso));
+}
+function formatTimeVN(iso){
+  if(!iso) return '';
+  return new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'}).format(new Date(iso));
+}
+function formatDateVN(iso){
+  if(!iso) return '';
+  return new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(iso));
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ============================================================
+   BUSINESS LOGIC HELPERS
+   ============================================================ */
+function orderRemaining(order, orderTx){
+  const paidThue = orderTx.filter(t=>t.order_id===order.id && t.type==='thu' && t.category==='tien_thue')
+    .reduce((s,t)=>s+Number(t.amount),0);
+  return Number(order.rental_price) - paidThue;
+}
+function isCashDeposit(order){
+  return order.deposit_type === 'cash' || order.deposit_type === 'cash_cccd';
+}
+function depositHeld(order){
+  if(!isCashDeposit(order)) return 0;
+  if(!['booked','picked_up','returned'].includes(order.status)) return 0;
+  return Number(order.deposit_amount) - Number(order.deposit_returned_amount || 0);
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+document.getElementById('login-form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errBox = document.getElementById('login-error');
+  errBox.textContent = '';
+  const {data, error} = await sb.auth.signInWithPassword({email,password});
+  if(error){
+    errBox.textContent = 'Sai email hoặc mật khẩu.';
+    return;
+  }
+  await afterLogin(data.user);
+});
+
+document.getElementById('logout-btn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('app-screen').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+});
+
+async function afterLogin(user){
+  // Kiểm tra whitelist app_users để có UX rõ ràng (RLS đã chặn dữ liệu ở tầng DB dù thế nào)
+  const {data: whitelistRow} = await sb.from('app_users').select('user_id').eq('user_id', user.id).maybeSingle();
+  if(!whitelistRow){
+    document.getElementById('login-error').textContent = 'Tài khoản không có quyền truy cập.';
+    await sb.auth.signOut();
+    return;
+  }
+  currentUser = user;
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.remove('hidden');
+  switchTab('today');
+}
+
+async function initSession(){
+  const {data} = await sb.auth.getSession();
+  if(data.session && data.session.user){
+    await afterLogin(data.session.user);
+  }
+}
+initSession();
+
+/* ============================================================
+   TAB NAV
+   ============================================================ */
+document.querySelectorAll('#bottom-nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>switchTab(btn.dataset.tab));
+});
+const TAB_TITLES = {today:'Hôm nay', orders:'Đơn thuê', cashflow:'Thu chi', report:'Báo cáo'};
+function switchTab(tab){
+  currentTab = tab;
+  document.getElementById('topbar-title').textContent = TAB_TITLES[tab];
+  document.querySelectorAll('#bottom-nav button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tab);
+  });
+  const map = {today:renderToday, orders:renderOrders, cashflow:renderCashflow, report:renderReport};
+  map[tab]();
+}
+
+/* ============================================================
+   MODAL HELPERS
+   ============================================================ */
+function openModal(innerHtml){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+      <button class="close-x" id="modal-close">✕</button>
+      ${innerHtml}
+    </div>
+  </div>`;
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-overlay').addEventListener('click', (e)=>{
+    if(e.target.id==='modal-overlay') closeModal();
+  });
+}
+function closeModal(){
+  document.getElementById('modal-root').innerHTML = '';
+}
+
+/* ============================================================
+   TAB 1: HÔM NAY
+   ============================================================ */
+async function renderToday(){
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="loading">Đang tải...</div>';
+
+  const today = vnDateStr();
+  const {startISO:dayStart, endISO:dayEnd} = vnDayRange(today);
+  const {startISO:monthStart, endISO:monthEnd} = vnMonthRange(currentVnYearMonth());
+  const nowISO = new Date().toISOString();
+
+  const [ordersRes, txMonthRes, custRes] = await Promise.all([
+    sb.from('orders').select('*').order('pickup_at',{ascending:true}),
+    sb.from('transactions').select('*').gte('occurred_at', monthStart).lt('occurred_at', monthEnd),
+    sb.from('customers').select('id,name,phone')
+  ]);
+  const orders = ordersRes.data || [];
+  const txMonth = txMonthRes.data || [];
+  const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
+
+  const thuThang = txMonth.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
+  const chiThang = txMonth.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
+  const cocGiu = orders.reduce((s,o)=>s+depositHeld(o),0);
+
+  const pickupToday = orders.filter(o=>o.status==='booked' && o.pickup_at>=dayStart && o.pickup_at<dayEnd);
+  const returnToday = orders.filter(o=>o.status==='picked_up' && o.return_due_at>=dayStart && o.return_due_at<dayEnd);
+  const overdue = orders.filter(o=>o.status==='picked_up' && o.return_due_at < nowISO);
+
+  function custInfo(o){
+    const c = customers[o.customer_id];
+    return c || {name:'(?)', phone:''};
+  }
+  function overdueDuration(returnDueAt){
+    const diffMs = Date.now() - new Date(returnDueAt).getTime();
+    const hours = Math.floor(diffMs/3600000);
+    if(hours < 24) return `Trễ ${hours} giờ`;
+    const days = Math.floor(hours/24);
+    return `Trễ ${days} ngày`;
+  }
+
+  function renderOrderCard(o, opts){
+    const c = custInfo(o);
+    const isOverdue = opts.overdue;
+    return `<div class="card order-card ${isOverdue?'overdue-card':''}" data-order-id="${o.id}">
+      <div class="row1">
+        <span class="name">${escapeHtml(c.name)}</span>
+        <span class="time">${opts.timeLabel}</span>
+      </div>
+      <div class="items">${escapeHtml(o.items_text)}</div>
+      <div class="meta">
+        ${c.phone ? `<a class="tel-link" href="tel:${escapeHtml(c.phone)}">📞 ${escapeHtml(c.phone)}</a> · ` : ''}
+        ${money(o.rental_price)}
+      </div>
+      ${isOverdue ? `<div class="overdue-tag">${overdueDuration(o.return_due_at)}</div>` : ''}
+      <div class="actions">
+        ${opts.action}
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+  html += `<div class="summary-row">
+    <div class="summary-item"><div class="lbl">Thu tháng này</div><div class="val">${money(thuThang)}</div></div>
+    <div class="summary-item"><div class="lbl">Chi tháng này</div><div class="val">${money(chiThang)}</div></div>
+    <div class="summary-item"><div class="lbl">Cọc đang giữ</div><div class="val">${money(cocGiu)}</div></div>
+  </div>`;
+
+  if(overdue.length){
+    html += `<div class="section-title">⚠️ Quá hạn</div>`;
+    html += overdue.map(o=>renderOrderCard(o,{
+      overdue:true, timeLabel: formatDateTimeVN(o.return_due_at),
+      action:`<button class="btn block-sm" data-action="pickedup-to-returned" data-id="${o.id}">Đã nhận lại đồ</button>
+              <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
+    })).join('');
+  }
+
+  html += `<div class="section-title">Nhận đồ hôm nay</div>`;
+  html += pickupToday.length ? pickupToday.map(o=>renderOrderCard(o,{
+    overdue:false, timeLabel: formatTimeVN(o.pickup_at),
+    action:`<button class="btn block-sm" data-action="booked-to-pickedup" data-id="${o.id}">Đã giao đồ</button>
+            <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
+  })).join('') : `<div class="empty-state">Không có đơn nhận đồ hôm nay</div>`;
+
+  html += `<div class="section-title">Trả đồ hôm nay</div>`;
+  html += returnToday.length ? returnToday.map(o=>renderOrderCard(o,{
+    overdue:false, timeLabel: formatTimeVN(o.return_due_at),
+    action:`<button class="btn block-sm" data-action="pickedup-to-returned" data-id="${o.id}">Đã nhận lại đồ</button>
+            <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
+  })).join('') : `<div class="empty-state">Không có đơn trả đồ hôm nay</div>`;
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('[data-action="open-order"]').forEach(b=>b.addEventListener('click',()=>openOrderDetail(b.dataset.id)));
+  el.querySelectorAll('[data-action="booked-to-pickedup"]').forEach(b=>b.addEventListener('click',()=>flowBookedToPickedUp(b.dataset.id, renderToday)));
+  el.querySelectorAll('[data-action="pickedup-to-returned"]').forEach(b=>b.addEventListener('click',()=>flowPickedUpToReturned(b.dataset.id, renderToday)));
+}
+
+/* ============================================================
+   TAB 2: ĐƠN THUÊ
+   ============================================================ */
+let ordersFilterStatus = 'all';
+let ordersSearchTerm = '';
+
+async function renderOrders(){
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="loading">Đang tải...</div>';
+
+  const [ordersRes, custRes] = await Promise.all([
+    sb.from('orders').select('*').order('created_at',{ascending:false}),
+    sb.from('customers').select('id,name,phone')
+  ]);
+  const orders = ordersRes.data || [];
+  const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
+
+  let html = `<div class="fab-row">
+    <button class="btn" id="btn-new-order">+ Đơn mới</button>
+  </div>`;
+  html += `<div class="filter-row">
+    <select id="filter-status">
+      <option value="all">Tất cả trạng thái</option>
+      <option value="booked">Đã đặt</option>
+      <option value="picked_up">Khách đang giữ đồ</option>
+      <option value="returned">Đã trả đồ</option>
+      <option value="closed">Hoàn tất</option>
+      <option value="cancelled">Đã hủy</option>
+    </select>
+  </div>
+  <div class="filter-row">
+    <input type="text" id="search-order" placeholder="Tìm tên / SĐT / mã đơn" value="${escapeHtml(ordersSearchTerm)}">
+  </div>`;
+  html += `<div id="orders-list"></div>`;
+  el.innerHTML = html;
+
+  document.getElementById('filter-status').value = ordersFilterStatus;
+  document.getElementById('filter-status').addEventListener('change',(e)=>{
+    ordersFilterStatus = e.target.value;
+    paintOrdersList(orders, customers);
+  });
+  document.getElementById('search-order').addEventListener('input',(e)=>{
+    ordersSearchTerm = e.target.value;
+    paintOrdersList(orders, customers);
+  });
+  document.getElementById('btn-new-order').addEventListener('click', ()=>openNewOrderModal());
+
+  paintOrdersList(orders, customers);
+}
+
+function paintOrdersList(orders, customers){
+  const listEl = document.getElementById('orders-list');
+  const term = ordersSearchTerm.trim().toLowerCase();
+  const filtered = orders.filter(o=>{
+    if(ordersFilterStatus !== 'all' && o.status !== ordersFilterStatus) return false;
+    if(!term) return true;
+    const c = customers[o.customer_id] || {};
+    return (c.name||'').toLowerCase().includes(term) ||
+           (c.phone||'').toLowerCase().includes(term) ||
+           (o.code||'').toLowerCase().includes(term);
+  });
+  if(!filtered.length){
+    listEl.innerHTML = `<div class="empty-state">Không có đơn nào</div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.map(o=>{
+    const c = customers[o.customer_id] || {name:'(?)',phone:''};
+    return `<div class="card order-card" data-order-id="${o.id}">
+      <div class="row1">
+        <span class="name">${escapeHtml(c.name)} <span class="badge ${o.status}">${STATUS_LABEL[o.status]}</span></span>
+        <span class="time">${o.code}</span>
+      </div>
+      <div class="items">${escapeHtml(o.items_text)}</div>
+      <div class="meta">Nhận: ${formatDateTimeVN(o.pickup_at)} · Trả: ${formatDateTimeVN(o.return_due_at)}</div>
+      <div class="meta">${money(o.rental_price)} · Cọc: ${money(o.deposit_amount)} (${DEPOSIT_LABEL[o.deposit_type]})</div>
+      <div class="actions"><button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button></div>
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('[data-action="open-order"]').forEach(b=>b.addEventListener('click',()=>openOrderDetail(b.dataset.id)));
+}
+
+function openNewOrderModal(){
+  openModal(`
+    <h3>Đơn thuê mới</h3>
+    <form id="new-order-form">
+      <div class="field"><label>Tên khách *</label><input type="text" id="f-name" required></div>
+      <div class="field"><label>Số điện thoại</label><input type="tel" id="f-phone"></div>
+      <div class="field" id="known-cust-note" style="display:none;color:var(--ok);font-size:13px;"></div>
+      <div class="field"><label>Món thuê *</label><textarea id="f-items" required></textarea></div>
+      <div class="field"><label>Nhận lúc *</label><input type="datetime-local" id="f-pickup" required></div>
+      <div class="field"><label>Trả lúc *</label><input type="datetime-local" id="f-return" required></div>
+      <div class="field"><label>Tiền thuê *</label><input type="text" inputmode="numeric" id="f-price" required></div>
+      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="f-deposit" value="0"></div>
+      <div class="field">
+        <label>Hình thức cọc</label>
+        <select id="f-deposit-type">
+          <option value="cash">Tiền mặt</option>
+          <option value="cccd">CCCD</option>
+          <option value="cash_cccd">Tiền mặt + CCCD</option>
+          <option value="none">Không cọc</option>
+        </select>
+      </div>
+      <div class="field"><label>Ghi chú</label><textarea id="f-note"></textarea></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn">Lưu đơn</button>
+      </div>
+    </form>
+  `);
+  attachMoneyFormatting(document.getElementById('f-price'));
+  attachMoneyFormatting(document.getElementById('f-deposit'));
+
+  const phoneInput = document.getElementById('f-phone');
+  let foundCustomerId = null;
+  phoneInput.addEventListener('blur', async ()=>{
+    const phone = phoneInput.value.trim();
+    const noteEl = document.getElementById('known-cust-note');
+    foundCustomerId = null;
+    noteEl.style.display = 'none';
+    if(!phone) return;
+    const {data} = await sb.from('customers').select('id,name').eq('phone',phone).maybeSingle();
+    if(data){
+      foundCustomerId = data.id;
+      document.getElementById('f-name').value = data.name;
+      noteEl.textContent = `Khách quen: ${data.name}`;
+      noteEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('new-order-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const name = document.getElementById('f-name').value.trim();
+    const phone = phoneInput.value.trim();
+    const items = document.getElementById('f-items').value.trim();
+    const pickup = document.getElementById('f-pickup').value;
+    const ret = document.getElementById('f-return').value;
+    const price = parseMoneyInput(document.getElementById('f-price').value);
+    const deposit = parseMoneyInput(document.getElementById('f-deposit').value);
+    const depositType = document.getElementById('f-deposit-type').value;
+    const note = document.getElementById('f-note').value.trim();
+
+    if(!pickup || !ret){ toast('Nhập đủ ngày giờ nhận/trả'); return; }
+    const pickupISO = vnLocalInputToISO(pickup);
+    const returnISO = vnLocalInputToISO(ret);
+    if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
+
+    let customerId = foundCustomerId;
+    if(!customerId){
+      const insertPayload = {name};
+      if(phone) insertPayload.phone = phone;
+      const {data:newCust, error:custErr} = await sb.from('customers').insert(insertPayload).select().single();
+      if(custErr){ toast('Lỗi tạo khách: '+custErr.message); return; }
+      customerId = newCust.id;
+    }
+
+    const {error} = await sb.from('orders').insert({
+      customer_id: customerId,
+      items_text: items,
+      pickup_at: pickupISO,
+      return_due_at: returnISO,
+      rental_price: price,
+      deposit_amount: deposit,
+      deposit_type: depositType,
+      note: note || null
+    });
+    if(error){ toast('Lỗi tạo đơn: '+error.message); return; }
+    closeModal();
+    toast('Đã tạo đơn mới');
+    renderOrders();
+  });
+}
+
+/* ---------- Chi tiết đơn ---------- */
+async function openOrderDetail(orderId){
+  const {data: order} = await sb.from('orders').select('*').eq('id', orderId).single();
+  if(!order){ toast('Không tìm thấy đơn'); return; }
+  const {data: customer} = await sb.from('customers').select('*').eq('id', order.customer_id).maybeSingle();
+  const {data: tx} = await sb.from('transactions').select('*').eq('order_id', orderId).order('occurred_at',{ascending:false});
+  const orderTx = tx || [];
+  const remaining = orderRemaining(order, orderTx);
+  const held = depositHeld(order);
+
+  let actionsHtml = '';
+  if(order.status === 'booked'){
+    actionsHtml += `<button class="btn block-sm" data-act="booked-to-pickedup">Đã giao đồ</button>`;
+    actionsHtml += `<button class="btn danger block-sm" data-act="cancel-order">Hủy đơn</button>`;
+  }
+  if(order.status === 'picked_up'){
+    actionsHtml += `<button class="btn block-sm" data-act="pickedup-to-returned">Đã nhận lại đồ</button>`;
+  }
+  if(order.status === 'returned' && isCashDeposit(order)){
+    actionsHtml += `<button class="btn block-sm" data-act="return-deposit">Hoàn cọc</button>`;
+  }
+  if(remaining > 0 && order.status !== 'cancelled'){
+    actionsHtml += `<button class="btn secondary block-sm" data-act="collect-remaining">Thu nốt ${money(remaining)}</button>`;
+  }
+  if(!['closed','cancelled'].includes(order.status)){
+    actionsHtml += `<button class="btn secondary block-sm" data-act="edit-order">Sửa đơn</button>`;
+  }
+
+  openModal(`
+    <h3>${order.code}</h3>
+    <div class="kv"><span class="k">Khách</span><span class="v">${escapeHtml(customer?.name||'(?)')}</span></div>
+    <div class="kv"><span class="k">SĐT</span><span class="v">${customer?.phone ? `<a class="tel-link" href="tel:${escapeHtml(customer.phone)}">${escapeHtml(customer.phone)}</a>` : '—'}</span></div>
+    <div class="kv"><span class="k">Món thuê</span><span class="v">${escapeHtml(order.items_text)}</span></div>
+    <div class="kv"><span class="k">Nhận lúc</span><span class="v">${formatDateTimeVN(order.pickup_at)}</span></div>
+    <div class="kv"><span class="k">Trả lúc (hạn)</span><span class="v">${formatDateTimeVN(order.return_due_at)}</span></div>
+    ${order.returned_at ? `<div class="kv"><span class="k">Đã trả lúc</span><span class="v">${formatDateTimeVN(order.returned_at)}</span></div>` : ''}
+    <div class="kv"><span class="k">Trạng thái</span><span class="v"><span class="badge ${order.status}">${STATUS_LABEL[order.status]}</span></span></div>
+    <div class="kv"><span class="k">Tiền thuê</span><span class="v">${money(order.rental_price)}</span></div>
+    <div class="kv"><span class="k">Còn thiếu</span><span class="v ${remaining>0?'remain-warn':''}">${money(remaining)}</span></div>
+    <div class="kv"><span class="k">Tiền cọc</span><span class="v">${money(order.deposit_amount)} (${DEPOSIT_LABEL[order.deposit_type]})</span></div>
+    ${isCashDeposit(order) ? `<div class="kv"><span class="k">Cọc đang giữ</span><span class="v">${money(held)}</span></div>` : ''}
+    ${order.deposit_returned_amount!=null ? `<div class="kv"><span class="k">Đã hoàn cọc</span><span class="v">${money(order.deposit_returned_amount)} lúc ${formatDateTimeVN(order.deposit_returned_at)}</span></div>` : ''}
+    ${order.note ? `<div class="kv"><span class="k">Ghi chú</span><span class="v">${escapeHtml(order.note)}</span></div>` : ''}
+
+    <div class="section-title">Giao dịch gắn đơn</div>
+    ${orderTx.length ? orderTx.map(t=>`
+      <div class="tx-row">
+        <div><div>${CAT_LABEL[t.category]||t.category}</div><div class="cat">${formatDateTimeVN(t.occurred_at)}</div></div>
+        <div class="amt ${t.type}">${t.type==='thu'?'+':'-'}${money(t.amount)}</div>
+      </div>`).join('') : `<div class="empty-state">Chưa có giao dịch</div>`}
+
+    <div class="modal-actions" style="flex-wrap:wrap;">${actionsHtml}</div>
+  `);
+
+  const box = document.querySelector('.modal-box');
+  box.querySelector('[data-act="booked-to-pickedup"]')?.addEventListener('click', ()=>flowBookedToPickedUp(order.id, ()=>{ if(currentTab==='orders') renderOrders(); else renderToday(); }));
+  box.querySelector('[data-act="pickedup-to-returned"]')?.addEventListener('click', ()=>flowPickedUpToReturned(order.id, ()=>{ if(currentTab==='orders') renderOrders(); else renderToday(); }));
+  box.querySelector('[data-act="cancel-order"]')?.addEventListener('click', ()=>flowCancelOrder(order, ()=>renderOrders()));
+  box.querySelector('[data-act="collect-remaining"]')?.addEventListener('click', ()=>flowCollectRemaining(order, remaining, ()=>{openOrderDetail(order.id);}));
+  box.querySelector('[data-act="return-deposit"]')?.addEventListener('click', ()=>flowReturnDeposit(order, ()=>renderOrders()));
+  box.querySelector('[data-act="edit-order"]')?.addEventListener('click', ()=>openEditOrderModal(order, customer));
+}
+
+/* ---------- Flow: booked -> picked_up (thu tiền thuê) ---------- */
+function flowBookedToPickedUp(orderId, onDone){
+  sb.from('orders').select('*').eq('id',orderId).single().then(({data:order})=>{
+    openModal(`
+      <h3>Xác nhận giao đồ</h3>
+      <p>Thu tiền thuê cho đơn <b>${order.code}</b>:</p>
+      <div class="field"><label>Số tiền thu</label><input type="text" inputmode="numeric" id="f-collect" value="${Number(order.rental_price).toLocaleString('vi-VN')}"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btn-skip-collect">Bỏ qua (chưa thu)</button>
+        <button class="btn" id="btn-confirm-collect">Xác nhận thu & giao đồ</button>
+      </div>
+    `);
+    attachMoneyFormatting(document.getElementById('f-collect'));
+    document.getElementById('btn-skip-collect').addEventListener('click', async ()=>{
+      const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      closeModal(); toast('Đã giao đồ'); onDone();
+    });
+    document.getElementById('btn-confirm-collect').addEventListener('click', async ()=>{
+      const amount = parseMoneyInput(document.getElementById('f-collect').value);
+      if(amount > 0){
+        const {error:txErr} = await sb.from('transactions').insert({
+          type:'thu', category:'tien_thue', amount, order_id: orderId
+        });
+        if(txErr){ toast('Lỗi: '+txErr.message); return; }
+      }
+      const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      closeModal(); toast('Đã giao đồ'); onDone();
+    });
+  });
+}
+
+/* ---------- Flow: thu nốt (còn thiếu) ---------- */
+function flowCollectRemaining(order, remaining, onDone){
+  openModal(`
+    <h3>Thu nốt tiền thuê</h3>
+    <p>Đơn <b>${order.code}</b> — còn thiếu ${money(remaining)}</p>
+    <div class="field"><label>Số tiền thu</label><input type="text" inputmode="numeric" id="f-collect2" value="${remaining.toLocaleString('vi-VN')}"></div>
+    <div class="modal-actions"><button class="btn" id="btn-confirm-collect2">Xác nhận thu</button></div>
+  `);
+  attachMoneyFormatting(document.getElementById('f-collect2'));
+  document.getElementById('btn-confirm-collect2').addEventListener('click', async ()=>{
+    const amount = parseMoneyInput(document.getElementById('f-collect2').value);
+    if(amount<=0){ toast('Số tiền phải > 0'); return; }
+    const {error} = await sb.from('transactions').insert({type:'thu',category:'tien_thue',amount,order_id:order.id});
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã thu nốt'); onDone();
+  });
+}
+
+/* ---------- Flow: picked_up -> returned (+ auto closed nếu không cọc tiền mặt) ---------- */
+function flowPickedUpToReturned(orderId, onDone){
+  sb.from('orders').select('*').eq('id',orderId).single().then(async ({data:order})=>{
+    const nowISO = new Date().toISOString();
+    if(isCashDeposit(order)){
+      const {error} = await sb.from('orders').update({status:'returned', returned_at: nowISO}).eq('id',orderId);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      toast('Đã nhận lại đồ. Còn cọc cần hoàn.');
+      onDone();
+    } else {
+      const {error} = await sb.from('orders').update({status:'closed', returned_at: nowISO}).eq('id',orderId);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      toast('Đã nhận lại đồ. Đơn hoàn tất (không có cọc tiền mặt).');
+      onDone();
+    }
+  });
+}
+
+/* ---------- Flow: hoàn cọc (returned -> closed) ---------- */
+function flowReturnDeposit(order, onDone){
+  openModal(`
+    <h3>Hoàn cọc</h3>
+    <p>Đơn <b>${order.code}</b> — cọc: ${money(order.deposit_amount)}</p>
+    <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
+    <div class="field"><label>Lý do (bắt buộc nếu hoàn thiếu)</label><textarea id="f-refund-reason"></textarea></div>
+    <div class="modal-actions"><button class="btn" id="btn-confirm-refund">Xác nhận hoàn cọc & đóng đơn</button></div>
+  `);
+  attachMoneyFormatting(document.getElementById('f-refund'));
+  document.getElementById('btn-confirm-refund').addEventListener('click', async ()=>{
+    const refund = parseMoneyInput(document.getElementById('f-refund').value);
+    const reason = document.getElementById('f-refund-reason').value.trim();
+    const deposit = Number(order.deposit_amount);
+    if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
+    if(refund < deposit && !reason){ toast('Nhập lý do khi hoàn thiếu cọc'); return; }
+    const diff = deposit - refund;
+    if(diff > 0){
+      const {error:txErr} = await sb.from('transactions').insert({
+        type:'thu', category:'tien_den', amount: diff, order_id: order.id,
+        note: reason
+      });
+      if(txErr){ toast('Lỗi: '+txErr.message); return; }
+    }
+    const {error} = await sb.from('orders').update({
+      deposit_returned_amount: refund,
+      deposit_returned_at: new Date().toISOString(),
+      status: 'closed'
+    }).eq('id', order.id);
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã hoàn cọc, đơn hoàn tất'); onDone();
+  });
+}
+
+/* ---------- Flow: hủy đơn (chỉ khi booked) ---------- */
+function flowCancelOrder(order, onDone){
+  if(isCashDeposit(order) && Number(order.deposit_amount) > 0){
+    openModal(`
+      <h3>Hủy đơn ${order.code}</h3>
+      <p>Đơn có cọc tiền mặt ${money(order.deposit_amount)}. Hoàn lại cho khách bao nhiêu?</p>
+      <div class="field"><label>Số tiền hoàn lại khách</label><input type="text" inputmode="numeric" id="f-cancel-refund" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
+      <p style="font-size:13px;color:var(--muted);">Phần tiệm giữ lại (khách bùng) sẽ tự tính = cọc − số hoàn, ghi nhận là "Phí hủy".</p>
+      <div class="modal-actions"><button class="btn danger" id="btn-confirm-cancel">Xác nhận hủy đơn</button></div>
+    `);
+    attachMoneyFormatting(document.getElementById('f-cancel-refund'));
+    document.getElementById('btn-confirm-cancel').addEventListener('click', async ()=>{
+      const refund = parseMoneyInput(document.getElementById('f-cancel-refund').value);
+      const deposit = Number(order.deposit_amount);
+      if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
+      const kept = deposit - refund;
+      if(kept > 0){
+        const {error:txErr} = await sb.from('transactions').insert({
+          type:'thu', category:'phi_huy', amount: kept, order_id: order.id
+        });
+        if(txErr){ toast('Lỗi: '+txErr.message); return; }
+      }
+      const {error} = await sb.from('orders').update({
+        status:'cancelled',
+        deposit_returned_amount: refund,
+        deposit_returned_at: new Date().toISOString()
+      }).eq('id', order.id);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      closeModal(); toast('Đã hủy đơn'); onDone();
+    });
+  } else {
+    openModal(`
+      <h3>Hủy đơn ${order.code}</h3>
+      <p>Đơn không có cọc tiền mặt. Xác nhận hủy?</p>
+      <div class="modal-actions"><button class="btn danger" id="btn-confirm-cancel2">Xác nhận hủy đơn</button></div>
+    `);
+    document.getElementById('btn-confirm-cancel2').addEventListener('click', async ()=>{
+      const {error} = await sb.from('orders').update({status:'cancelled'}).eq('id', order.id);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      closeModal(); toast('Đã hủy đơn'); onDone();
+    });
+  }
+}
+
+/* ---------- Sửa đơn ---------- */
+function openEditOrderModal(order, customer){
+  openModal(`
+    <h3>Sửa đơn ${order.code}</h3>
+    <form id="edit-order-form">
+      <div class="field"><label>Tên khách</label><input type="text" id="e-name" value="${escapeHtml(customer?.name||'')}"></div>
+      <div class="field"><label>Số điện thoại</label><input type="tel" id="e-phone" value="${escapeHtml(customer?.phone||'')}"></div>
+      <div class="field"><label>Món thuê</label><textarea id="e-items">${escapeHtml(order.items_text)}</textarea></div>
+      <div class="field"><label>Nhận lúc</label><input type="datetime-local" id="e-pickup" value="${isoToVnLocalInput(order.pickup_at)}"></div>
+      <div class="field"><label>Trả lúc</label><input type="datetime-local" id="e-return" value="${isoToVnLocalInput(order.return_due_at)}"></div>
+      <div class="field"><label>Tiền thuê</label><input type="text" inputmode="numeric" id="e-price" value="${Number(order.rental_price).toLocaleString('vi-VN')}"></div>
+      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="e-deposit" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
+      <div class="field">
+        <label>Hình thức cọc</label>
+        <select id="e-deposit-type">
+          <option value="cash" ${order.deposit_type==='cash'?'selected':''}>Tiền mặt</option>
+          <option value="cccd" ${order.deposit_type==='cccd'?'selected':''}>CCCD</option>
+          <option value="cash_cccd" ${order.deposit_type==='cash_cccd'?'selected':''}>Tiền mặt + CCCD</option>
+          <option value="none" ${order.deposit_type==='none'?'selected':''}>Không cọc</option>
+        </select>
+      </div>
+      <div class="field"><label>Ghi chú</label><textarea id="e-note">${escapeHtml(order.note||'')}</textarea></div>
+      <div class="modal-actions"><button type="submit" class="btn">Lưu thay đổi</button></div>
+    </form>
+  `);
+  attachMoneyFormatting(document.getElementById('e-price'));
+  attachMoneyFormatting(document.getElementById('e-deposit'));
+  document.getElementById('edit-order-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const pickupISO = vnLocalInputToISO(document.getElementById('e-pickup').value);
+    const returnISO = vnLocalInputToISO(document.getElementById('e-return').value);
+    if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
+    const price = parseMoneyInput(document.getElementById('e-price').value);
+    const deposit = parseMoneyInput(document.getElementById('e-deposit').value);
+
+    if(customer){
+      await sb.from('customers').update({
+        name: document.getElementById('e-name').value.trim(),
+        phone: document.getElementById('e-phone').value.trim() || null
+      }).eq('id', customer.id);
+    }
+    const {error} = await sb.from('orders').update({
+      items_text: document.getElementById('e-items').value.trim(),
+      pickup_at: pickupISO,
+      return_due_at: returnISO,
+      rental_price: price,
+      deposit_amount: deposit,
+      deposit_type: document.getElementById('e-deposit-type').value,
+      note: document.getElementById('e-note').value.trim() || null
+    }).eq('id', order.id);
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã lưu');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
+}
+
+/* ============================================================
+   TAB 3: THU CHI
+   ============================================================ */
+let cashflowMonth = currentVnYearMonth();
+let cashflowType = 'all';
+let cashflowCategory = 'all';
+
+async function renderCashflow(){
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="loading">Đang tải...</div>';
+
+  let html = `<div class="fab-row">
+    <button class="btn thu" id="btn-add-thu">+ Thu</button>
+    <button class="btn chi" id="btn-add-chi">+ Chi</button>
+  </div>`;
+  html += `<div class="filter-row">
+    <input type="month" id="cf-month" value="${cashflowMonth}">
+    <select id="cf-type">
+      <option value="all">Tất cả loại</option>
+      <option value="thu">Thu</option>
+      <option value="chi">Chi</option>
+    </select>
+  </div>
+  <div class="filter-row">
+    <select id="cf-category"><option value="all">Tất cả danh mục</option></select>
+  </div>`;
+  html += `<div id="cf-list"></div>`;
+  el.innerHTML = html;
+
+  document.getElementById('btn-add-thu').addEventListener('click', ()=>openTxModal('thu'));
+  document.getElementById('btn-add-chi').addEventListener('click', ()=>openTxModal('chi'));
+  document.getElementById('cf-month').addEventListener('change',(e)=>{cashflowMonth=e.target.value; loadCashflowList();});
+  document.getElementById('cf-type').value = cashflowType;
+  document.getElementById('cf-type').addEventListener('change',(e)=>{cashflowType=e.target.value; refreshCategoryOptions(); loadCashflowList();});
+
+  refreshCategoryOptions();
+  document.getElementById('cf-category').addEventListener('change',(e)=>{cashflowCategory=e.target.value; loadCashflowList();});
+
+  await loadCashflowList();
+}
+function refreshCategoryOptions(){
+  const sel = document.getElementById('cf-category');
+  let opts = [['all','Tất cả danh mục']];
+  if(cashflowType==='thu') opts = opts.concat(CATS_THU);
+  else if(cashflowType==='chi') opts = opts.concat(CATS_CHI);
+  else opts = opts.concat(CATS_THU).concat(CATS_CHI);
+  sel.innerHTML = opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  sel.value = cashflowCategory && opts.some(o=>o[0]===cashflowCategory) ? cashflowCategory : 'all';
+  cashflowCategory = sel.value;
+}
+async function loadCashflowList(){
+  const listEl = document.getElementById('cf-list');
+  listEl.innerHTML = '<div class="loading">Đang tải...</div>';
+  const {startISO, endISO} = vnMonthRange(cashflowMonth);
+  let q = sb.from('transactions').select('*').gte('occurred_at',startISO).lt('occurred_at',endISO).order('occurred_at',{ascending:false});
+  if(cashflowType!=='all') q = q.eq('type', cashflowType);
+  if(cashflowCategory!=='all') q = q.eq('category', cashflowCategory);
+  const {data:tx} = await q;
+  const list = tx || [];
+  if(!list.length){ listEl.innerHTML = `<div class="empty-state">Không có giao dịch</div>`; return; }
+
+  const groups = {};
+  list.forEach(t=>{
+    const day = formatDateVN(t.occurred_at);
+    (groups[day] = groups[day]||[]).push(t);
+  });
+  let html = '';
+  Object.keys(groups).forEach(day=>{
+    html += `<div class="tx-day-group"><div class="tx-day-label">${day}</div>`;
+    groups[day].forEach(t=>{
+      html += `<div class="tx-row" data-tx-id="${t.id}">
+        <div><div>${CAT_LABEL[t.category]||t.category}</div><div class="cat">${t.note?escapeHtml(t.note):''}</div></div>
+        <div class="amt ${t.type}">${t.type==='thu'?'+':'-'}${money(t.amount)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  listEl.innerHTML = html;
+  listEl.querySelectorAll('.tx-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const t = list.find(x=>x.id===row.dataset.txId);
+      openTxEditModal(t);
+    });
+  });
+}
+
+function openTxModal(type){
+  const cats = type==='thu' ? CATS_THU : CATS_CHI;
+  openModal(`
+    <h3>${type==='thu'?'Thêm khoản thu':'Thêm khoản chi'}</h3>
+    <form id="tx-form">
+      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-amount" required autofocus></div>
+      <div class="field">
+        <label>Danh mục</label>
+        <div class="chips" id="tx-chips">
+          ${cats.map((c,i)=>`<button type="button" class="chip ${i===0?'active':''}" data-cat="${c[0]}">${c[1]}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field"><label>Ghi chú</label><textarea id="tx-note"></textarea></div>
+      <div class="modal-actions"><button type="submit" class="btn ${type}">Lưu</button></div>
+    </form>
+  `);
+  attachMoneyFormatting(document.getElementById('tx-amount'));
+  let selectedCat = cats[0][0];
+  document.querySelectorAll('#tx-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#tx-chips .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      selectedCat = chip.dataset.cat;
+    });
+  });
+  document.getElementById('tx-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const amount = parseMoneyInput(document.getElementById('tx-amount').value);
+    if(amount<=0){ toast('Nhập số tiền hợp lệ'); return; }
+    const note = document.getElementById('tx-note').value.trim();
+    const {error} = await sb.from('transactions').insert({type, category:selectedCat, amount, note: note || null});
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã lưu giao dịch');
+    if(currentTab==='cashflow') loadCashflowList();
+    else if(currentTab==='today') renderToday();
+  });
+}
+
+function openTxEditModal(t){
+  const cats = t.type==='thu' ? CATS_THU : CATS_CHI;
+  openModal(`
+    <h3>Sửa giao dịch</h3>
+    <form id="tx-edit-form">
+      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-e-amount" value="${Number(t.amount).toLocaleString('vi-VN')}"></div>
+      <div class="field">
+        <label>Danh mục</label>
+        <div class="chips" id="tx-e-chips">
+          ${cats.map(c=>`<button type="button" class="chip ${c[0]===t.category?'active':''}" data-cat="${c[0]}">${c[1]}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field"><label>Ghi chú</label><textarea id="tx-e-note">${escapeHtml(t.note||'')}</textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="tx-delete-btn">Xóa</button>
+        <button type="submit" class="btn">Lưu</button>
+      </div>
+    </form>
+  `);
+  attachMoneyFormatting(document.getElementById('tx-e-amount'));
+  let selectedCat = t.category;
+  document.querySelectorAll('#tx-e-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#tx-e-chips .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      selectedCat = chip.dataset.cat;
+    });
+  });
+  document.getElementById('tx-delete-btn').addEventListener('click', async ()=>{
+    const {error} = await sb.from('transactions').delete().eq('id', t.id);
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã xóa');
+    if(currentTab==='cashflow') loadCashflowList();
+  });
+  document.getElementById('tx-edit-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const amount = parseMoneyInput(document.getElementById('tx-e-amount').value);
+    if(amount<=0){ toast('Nhập số tiền hợp lệ'); return; }
+    const note = document.getElementById('tx-e-note').value.trim();
+    const {error} = await sb.from('transactions').update({amount, category:selectedCat, note: note||null}).eq('id', t.id);
+    if(error){ toast('Lỗi: '+error.message); return; }
+    closeModal(); toast('Đã lưu');
+    if(currentTab==='cashflow') loadCashflowList();
+  });
+}
+
+/* ============================================================
+   TAB 4: BÁO CÁO
+   ============================================================ */
+let reportMonth = currentVnYearMonth();
+
+async function renderReport(){
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="loading">Đang tải...</div>';
+  let html = `<div class="filter-row"><input type="month" id="rp-month" value="${reportMonth}"></div>`;
+  html += `<div id="rp-body"></div>`;
+  el.innerHTML = html;
+  document.getElementById('rp-month').addEventListener('change',(e)=>{reportMonth=e.target.value; loadReport();});
+  await loadReport();
+}
+
+async function loadReport(){
+  const body = document.getElementById('rp-body');
+  body.innerHTML = '<div class="loading">Đang tải...</div>';
+  const {startISO, endISO} = vnMonthRange(reportMonth);
+  const [txRes, ordersRes] = await Promise.all([
+    sb.from('transactions').select('*').gte('occurred_at',startISO).lt('occurred_at',endISO),
+    sb.from('orders').select('id,deposit_amount,deposit_returned_amount,deposit_type,status')
+  ]);
+  const tx = txRes.data || [];
+  const orders = ordersRes.data || [];
+
+  const totalThu = tx.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
+  const totalChi = tx.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
+  const laiLo = totalThu - totalChi;
+  const cocGiu = orders.reduce((s,o)=>s+depositHeld(o),0);
+
+  const breakdown = {};
+  tx.forEach(t=>{
+    const key = t.type+'|'+t.category;
+    breakdown[key] = (breakdown[key]||0) + Number(t.amount);
+  });
+  const thuRows = CATS_THU.filter(c=>breakdown['thu|'+c[0]]).map(c=>[c[1], breakdown['thu|'+c[0]]]);
+  const chiRows = CATS_CHI.filter(c=>breakdown['chi|'+c[0]]).map(c=>[c[1], breakdown['chi|'+c[0]]]);
+
+  body.innerHTML = `
+    <div class="summary-row">
+      <div class="summary-item"><div class="lbl">Tổng thu</div><div class="val">${money(totalThu)}</div></div>
+      <div class="summary-item"><div class="lbl">Tổng chi</div><div class="val">${money(totalChi)}</div></div>
+      <div class="summary-item"><div class="lbl">Lãi/lỗ</div><div class="val">${money(laiLo)}</div></div>
+    </div>
+    <div class="card" style="font-size:14px;">Cọc đang giữ: <b>${money(cocGiu)}</b> (không tính vào thu)</div>
+
+    <div class="section-title">Thu theo danh mục</div>
+    <table class="report-table">
+      <tbody>
+      ${thuRows.length ? thuRows.map(r=>`<tr><td>${r[0]}</td><td class="amt">${money(r[1])}</td></tr>`).join('') : '<tr><td colspan="2">Không có</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="section-title">Chi theo danh mục</div>
+    <table class="report-table">
+      <tbody>
+      ${chiRows.length ? chiRows.map(r=>`<tr><td>${r[0]}</td><td class="amt">${money(r[1])}</td></tr>`).join('') : '<tr><td colspan="2">Không có</td></tr>'}
+      </tbody>
+    </table>
+
+    <div style="margin-top:16px;"><button class="btn secondary" id="btn-export-csv">Xuất CSV</button></div>
+  `;
+  document.getElementById('btn-export-csv').addEventListener('click', ()=>exportCsv(tx, reportMonth));
+}
+
+function exportCsv(tx, monthStr){
+  const header = ['Ngày giờ','Loại','Danh mục','Số tiền','Ghi chú'];
+  const rows = tx.slice().sort((a,b)=> a.occurred_at < b.occurred_at ? -1 : 1).map(t=>[
+    formatDateTimeVN(t.occurred_at),
+    t.type==='thu'?'Thu':'Chi',
+    CAT_LABEL[t.category]||t.category,
+    Math.round(Number(t.amount)),
+    t.note||''
+  ]);
+  function csvField(v){
+    const s = String(v);
+    if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  }
+  const lines = [header, ...rows].map(r=>r.map(csvField).join(','));
+  const csvContent = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `thuchi_${monthStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
