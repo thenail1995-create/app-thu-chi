@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thu Chi Tiệm Thuê</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -71,7 +71,7 @@
     display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:10;
   }
   #bottom-nav button{
-    flex:1;background:none;border:none;padding:10px 4px 8px;color:var(--muted);font-size:12px;
+    flex:1;background:none;border:none;padding:10px 4px 8px;color:var(--muted);font-size:13px;
     display:flex;flex-direction:column;align-items:center;gap:2px;
   }
   #bottom-nav button .ic{font-size:20px;}
@@ -85,7 +85,7 @@
   .summary-row{display:flex;gap:8px;margin-bottom:4px;}
   .summary-item{flex:1;background:var(--card);border-radius:12px;padding:10px;text-align:center;
     box-shadow:0 1px 4px rgba(0,0,0,.05);}
-  .summary-item .lbl{font-size:11px;color:var(--muted);}
+  .summary-item .lbl{font-size:13px;color:var(--muted);}
   .summary-item .val{font-size:15px;font-weight:700;margin-top:2px;}
 
   .order-card{display:flex;flex-direction:column;gap:4px;}
@@ -95,7 +95,7 @@
   .order-card .items{color:var(--muted);font-size:14px;}
   .order-card .meta{font-size:13px;color:var(--muted);}
   .order-card .actions{display:flex;gap:8px;margin-top:8px;}
-  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;}
   .badge.booked{background:#e8eef7;color:#2b5fad;}
   .badge.picked_up{background:#fff3d6;color:#9a6b00;}
   .badge.returned{background:#e6f3ec;color:#1f8a53;}
@@ -125,7 +125,7 @@
 
   /* ---------- Transaction row ---------- */
   .tx-day-group{margin-bottom:10px;}
-  .tx-day-label{font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 4px;}
+  .tx-day-label{font-size:13px;color:var(--muted);font-weight:700;margin:10px 0 4px;}
   .tx-row{display:flex;justify-content:space-between;align-items:center;background:var(--card);
     border-radius:10px;padding:10px 12px;margin-bottom:6px;}
   .tx-row .cat{font-size:13px;color:var(--muted);}
@@ -143,7 +143,8 @@
   }
   .modal-box h3{margin-top:0;}
   .modal-actions{display:flex;gap:10px;margin-top:16px;}
-  .close-x{position:absolute;top:10px;right:16px;background:none;border:none;font-size:20px;color:var(--muted);}
+  .modal-actions.sticky-submit{position:sticky;bottom:0;background:var(--card);padding-top:8px;}
+  .close-x{position:absolute;top:2px;right:6px;background:none;border:none;font-size:20px;color:var(--muted);width:44px;height:44px;display:flex;align-items:center;justify-content:center;}
   .modal-box{position:relative;}
 
   .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px;}
@@ -160,6 +161,8 @@
   table.report-table th,table.report-table td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;}
   table.report-table td.amt{text-align:right;}
   .loading{text-align:center;color:var(--muted);padding:20px;font-size:14px;}
+  .error-block{background:var(--danger-bg);color:var(--danger);border-radius:12px;padding:16px;text-align:center;font-size:14px;}
+  .error-block button{margin-top:10px;}
 
   /* ---------- Phase 2: Tab Kho ---------- */
   .item-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -168,13 +171,19 @@
   .item-card .thumb img{width:100%;height:100%;object-fit:cover;}
   .item-card .info{padding:8px 10px;}
   .item-card .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
-  .item-card .meta{color:var(--muted);font-size:12px;margin-top:2px;}
+  .item-card .meta{color:var(--muted);font-size:13px;margin-top:2px;}
   .status-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block;}
   .status-dot.green{background:var(--ok);}
   .status-dot.yellow{background:#c9960c;}
   .status-dot.red{background:var(--danger);}
   .status-dot.gray{background:#9a9a9a;}
-  .item-avail{font-size:11px;color:var(--muted);margin-top:2px;}
+  .item-avail{font-size:13px;color:var(--muted);margin-top:2px;}
+  .status-label{font-size:13px;margin-top:2px;}
+  .status-label.green{color:var(--ok);}
+  .status-label.yellow{color:#9a6b00;}
+  .status-label.red{color:var(--danger);}
+  .status-label.gray{color:var(--muted);}
+  .amount-words{font-size:13px;color:var(--muted);margin-top:2px;min-height:16px;}
   .item-photo-lg{width:100%;aspect-ratio:1/1;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:72px;overflow:hidden;margin-bottom:10px;}
   .item-photo-lg img{width:100%;height:100%;object-fit:cover;}
   .manual-status-chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
@@ -183,7 +192,7 @@
   .picked-item-row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:6px;}
   .picked-item-row.conflict{border-color:var(--danger);background:var(--danger-bg);}
   .picked-item-row input{width:110px;padding:6px;border:1px solid var(--border);border-radius:8px;}
-  .picked-item-conflict-msg{color:var(--danger);font-size:12px;margin-top:2px;}
+  .picked-item-conflict-msg{color:var(--danger);font-size:13px;margin-top:2px;}
   .item-search-results{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
   .item-search-results:empty{display:none;border:none;margin-bottom:0;}
   .item-search-result-row{padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer;}
@@ -195,7 +204,7 @@
 <div id="login-screen">
   <h1>Thu Chi Tiệm Thuê</h1>
   <p class="sub">Đăng nhập để tiếp tục</p>
-  <div class="login-box">
+  <div class="login-box" id="login-box">
     <form id="login-form">
       <div class="field">
         <label>Email</label>
@@ -208,6 +217,10 @@
       <button type="submit" class="btn">Đăng nhập</button>
       <div id="login-error"></div>
     </form>
+  </div>
+  <div class="login-box hidden" id="login-retry-box">
+    <p>Mạng đang chập chờn — không kiểm tra được quyền truy cập. Vẫn đang đăng nhập, chỉ cần thử lại.</p>
+    <button type="button" class="btn" id="login-retry-btn">Thử lại</button>
   </div>
 </div>
 
@@ -250,9 +263,9 @@ const STATUS_LABEL = {booked:'Đã đặt',picked_up:'Khách đang giữ đồ',
 const DEPOSIT_LABEL = {cash:'Tiền mặt',cccd:'CCCD',cash_cccd:'Tiền mặt + CCCD',none:'Không cọc'};
 
 // ---- Phase 2: Kho đồ ----
-const CATEGORY_LABEL = {vay:'Váy', ao_dai:'Áo dài', phu_kien:'Phụ kiện', props:'Đạo cụ/Props', khac:'Khác'};
+const CATEGORY_LABEL = {vay:'Váy', ao_dai:'Áo dài', phu_kien:'Phụ kiện', props:'Đạo cụ', khac:'Khác'};
 const CATEGORY_EMOJI = {vay:'👗', ao_dai:'👘', phu_kien:'💍', props:'🎭', khac:'📦'};
-const MANUAL_STATUS_LABEL = {ok:'Bình thường', giat:'Đang giặt', sua:'Đang sửa', hong:'Hỏng', nghi:'Nghỉ'};
+const MANUAL_STATUS_LABEL = {ok:'Bình thường', giat:'Đang giặt', sua:'Đang sửa', hong:'Hỏng', nghi:'Ngưng cho thuê'};
 const DEFAULT_BUFFER_BY_CATEGORY = {vay:24, ao_dai:24, phu_kien:0, props:0, khac:24};
 
 let currentTab = 'today';
@@ -274,6 +287,67 @@ function attachMoneyFormatting(input){
     const raw = parseMoneyInput(input.value);
     input.value = raw ? raw.toLocaleString('vi-VN') : '';
   });
+}
+
+// C6: đọc số tiền thành chữ tiếng Việt, vd 500000 -> "năm trăm nghìn đồng".
+const VI_DIGIT = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+function viReadGroup(n, isFirstNonzeroGroup){
+  const tram = Math.floor(n/100);
+  const chuc = Math.floor((n%100)/10);
+  const donvi = n%10;
+  let s = '';
+  if(tram > 0){
+    s += VI_DIGIT[tram] + ' trăm';
+  } else if(!isFirstNonzeroGroup){
+    s += 'không trăm';
+  }
+  if(chuc === 0){
+    if(donvi > 0){
+      if(tram > 0 || !isFirstNonzeroGroup) s += ' lẻ';
+      s += ' ' + VI_DIGIT[donvi];
+    }
+  } else if(chuc === 1){
+    s += ' mười';
+    if(donvi > 0) s += ' ' + (donvi===5?'lăm':(donvi===1?'một':VI_DIGIT[donvi]));
+  } else {
+    s += ' ' + VI_DIGIT[chuc] + ' mươi';
+    if(donvi > 0){
+      if(donvi===1) s += ' mốt';
+      else if(donvi===5) s += ' lăm';
+      else s += ' ' + VI_DIGIT[donvi];
+    }
+  }
+  return s.trim();
+}
+function soTienThanhChu(n){
+  n = Math.round(Number(n)||0);
+  if(n === 0) return 'không đồng';
+  if(n < 0) return 'âm ' + soTienThanhChu(-n);
+  const scales = ['', ' nghìn', ' triệu', ' tỷ'];
+  const groups = [];
+  let x = n;
+  while(x > 0){
+    groups.push(x % 1000);
+    x = Math.floor(x/1000);
+  }
+  const parts = [];
+  for(let i=groups.length-1; i>=0; i--){
+    const g = groups[i];
+    if(g === 0) continue;
+    const isFirstNonzeroGroup = parts.length === 0;
+    parts.push(viReadGroup(g, isFirstNonzeroGroup) + (scales[i]||''));
+  }
+  return parts.join(' ').replace(/\s+/g,' ').trim() + ' đồng';
+}
+// Gắn dòng "đọc số thành chữ" dưới ô tiền, cập nhật khi blur — KHÔNG đổi cơ chế format-on-blur cũ
+// (attachMoneyFormatting vẫn xử lý riêng, hàm này chỉ thêm nhánh hiển thị chữ, không đổi giá trị input).
+function attachAmountInWords(inputEl, wordsEl){
+  function update(){
+    const val = parseMoneyInput(inputEl.value);
+    wordsEl.textContent = val > 0 ? soTienThanhChu(val) : '';
+  }
+  inputEl.addEventListener('blur', update);
+  update();
 }
 
 // yyyy-mm-dd của "hôm nay" theo giờ VN
@@ -374,12 +448,24 @@ function formatDateTimeForCsv(iso){
 function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function toast(msg){
+function toast(msg, durationMs){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+  toast._t = setTimeout(()=>t.classList.remove('show'), durationMs || 2200);
+}
+// B10: ánh xạ lỗi hay gặp sang tiếng Việt dễ hiểu (thay vì nguyên văn tiếng Anh của Postgres/JS).
+function viError(error){
+  const msg = (error && error.message) || String(error||'');
+  if(/duplicate key/i.test(msg) && /customers_phone_key/i.test(msg)) return 'Số điện thoại này đã có khách khác dùng';
+  if(/Failed to fetch|NetworkError|fetch/i.test(msg)) return 'Mất kết nối mạng — thử lại';
+  if(/JWT|token/i.test(msg)) return 'Phiên đăng nhập hết hạn — đăng nhập lại';
+  return 'Có lỗi xảy ra: ' + msg;
+}
+// B10: toast lỗi hiện lâu hơn toast thường (4s vs 2,2s).
+function toastError(error){
+  toast(viError(error), 4000);
 }
 
 /* ============================================================
@@ -542,6 +628,58 @@ function computeItemStatus(item, orders, orderItems, nowMs){
   return {color:'green', label:'Sẵn sàng', nextAvailableMs:null, nextAvailableUnknown:false};
 }
 
+// audit ux-fix-batch1 A2: trạng thái món tính theo 1 NGÀY ĐANG CHỌN (không phải Date.now()).
+// Ngày = hôm nay: giữ nguyên logic "đang thuê ngay lúc này" / "đã đặt trong 24h/3 ngày tới" như
+// computeItemStatus ở trên. Ngày khác: dùng checkConflict với khoảng [00:00,24:00) giờ VN của
+// ngày đó (hàm thuần checkConflict KHÔNG bị sửa, chỉ gọi với interval là cả ngày).
+function computeItemStatusForDate(item, orders, orderItems, dateStr){
+  const nowMs = Date.now();
+  const isToday = dateStr === vnDateStr();
+  const busy = itemBusyIntervals(item, orders, orderItems, nowMs);
+
+  if(item.manual_status !== 'ok'){
+    const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
+    const currentlyBusyNow = isToday && busy.some(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
+    return {
+      color:'gray',
+      label: currentlyBusyNow ? `${baseLabel} (đang thuê)` : baseLabel,
+      nextAvailableMs:null, nextAvailableUnknown:false
+    };
+  }
+
+  if(isToday){
+    const currentlyBusy = busy.find(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
+    if(currentlyBusy){
+      const nav = nextAvailableMs(item, busy, nowMs);
+      return {color:'red', label:'Đang thuê', nextAvailableMs: nav===Infinity?null:nav, nextAvailableUnknown: nav===Infinity};
+    }
+    const future = busy.filter(iv=>iv.startMs > nowMs).sort((a,b)=>a.startMs-b.startMs);
+    if(future.length){
+      const next = future[0];
+      const in24h = nowMs + 24*3600000;
+      const in3Days = nowMs + 3*24*3600000;
+      if(next.startMs <= in24h){
+        const iso = new Date(next.startMs).toISOString();
+        return {color:'yellow', label:`Đã đặt ${formatTimeVN(iso)} ${formatShortDateVN(iso)}`, nextAvailableMs:null, nextAvailableUnknown:false};
+      }
+      if(next.startMs <= in3Days){
+        return {color:'yellow', label:'Đã đặt', nextAvailableMs:null, nextAvailableUnknown:false};
+      }
+    }
+    return {color:'green', label:'Sẵn sàng', nextAvailableMs:null, nextAvailableUnknown:false};
+  }
+
+  // Ngày khác hôm nay: hỏi checkConflict xem cả ngày [00:00,24:00) giờ VN có đụng lịch không.
+  const {startISO, endISO} = vnDayRange(dateStr);
+  const dayStartMs = new Date(startISO).getTime();
+  const dayEndMs = new Date(endISO).getTime();
+  const conflict = checkConflict(item.id, dayStartMs, dayEndMs, item.buffer_hours, busy, null, item.manual_status);
+  if(conflict){
+    return {color:'yellow', label:'Đã có người đặt ngày này', nextAvailableMs:null, nextAvailableUnknown:false};
+  }
+  return {color:'green', label:'Còn trống ngày này', nextAvailableMs:null, nextAvailableUnknown:false};
+}
+
 // Giá gợi ý 1 món theo khoảng thời gian thuê.
 // audit-phase2 #6: công thức cũ dùng ngưỡng "≤8h thì tính theo giờ, ngược lại theo ngày" không
 // đơn điệu (8h có thể ra giá CAO hơn 8.5h) và món chỉ có giá giờ + thuê nhiều ngày sẽ ra 0đ
@@ -606,7 +744,11 @@ document.getElementById('login-form').addEventListener('submit', async (e)=>{
   errBox.textContent = '';
   const {data, error} = await sb.auth.signInWithPassword({email,password});
   if(error){
-    errBox.textContent = 'Sai email hoặc mật khẩu.';
+    if((error.message||'').includes('Invalid login credentials')){
+      errBox.textContent = 'Sai email hoặc mật khẩu.';
+    } else {
+      errBox.textContent = 'Không kết nối được — kiểm tra mạng rồi thử lại.';
+    }
     return;
   }
   await afterLogin(data.user);
@@ -615,19 +757,44 @@ document.getElementById('login-form').addEventListener('submit', async (e)=>{
 document.getElementById('logout-btn').addEventListener('click', async ()=>{
   await sb.auth.signOut();
   currentUser = null;
+  pendingAuthUser = null;
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-box').classList.remove('hidden');
+  document.getElementById('login-retry-box').classList.add('hidden');
 });
 
+document.getElementById('login-retry-btn').addEventListener('click', async ()=>{
+  if(pendingAuthUser){
+    await afterLogin(pendingAuthUser);
+  }
+});
+
+let pendingAuthUser = null;
 async function afterLogin(user){
+  pendingAuthUser = user;
   // Kiểm tra whitelist app_users để có UX rõ ràng (RLS đã chặn dữ liệu ở tầng DB dù thế nào)
-  const {data: whitelistRow} = await sb.from('app_users').select('user_id').eq('user_id', user.id).maybeSingle();
+  const {data: whitelistRow, error} = await sb.from('app_users').select('user_id').eq('user_id', user.id).maybeSingle();
+  if(error){
+    // Lỗi mạng/query: GIỮ phiên đăng nhập, không signOut, chỉ hiện khối thử lại
+    document.getElementById('login-box').classList.add('hidden');
+    document.getElementById('login-retry-box').classList.remove('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('app-screen').classList.add('hidden');
+    return;
+  }
   if(!whitelistRow){
+    document.getElementById('login-box').classList.remove('hidden');
+    document.getElementById('login-retry-box').classList.add('hidden');
     document.getElementById('login-error').textContent = 'Tài khoản không có quyền truy cập.';
+    pendingAuthUser = null;
     await sb.auth.signOut();
     return;
   }
+  pendingAuthUser = null;
   currentUser = user;
+  document.getElementById('login-box').classList.remove('hidden');
+  document.getElementById('login-retry-box').classList.add('hidden');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
   switchTab('today');
@@ -669,13 +836,36 @@ function openModal(innerHtml){
       ${innerHtml}
     </div>
   </div>`;
-  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-close').addEventListener('click', ()=>{
+    if(modalHasContent()){
+      if(!confirm('Bỏ nội dung đang nhập?')) return;
+    }
+    closeModal();
+  });
   document.getElementById('modal-overlay').addEventListener('click', (e)=>{
-    if(e.target.id==='modal-overlay') closeModal();
+    if(e.target.id!=='modal-overlay') return;
+    if(modalHasContent()){
+      // A4: chạm ngoài để tắt bàn phím không được xóa mất nội dung đang gõ — chỉ blur.
+      if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      return;
+    }
+    closeModal();
   });
 }
 function closeModal(){
   document.getElementById('modal-root').innerHTML = '';
+}
+// A4: form bên trong modal có input/textarea nào có giá trị, hoặc có món đã chọn (item-picker)?
+function modalHasContent(){
+  const box = document.querySelector('.modal-box');
+  if(!box) return false;
+  const fields = box.querySelectorAll('input, textarea');
+  for(const f of fields){
+    if(f.type==='checkbox' || f.type==='radio') continue;
+    if(String(f.value||'').trim() !== '') return true;
+  }
+  if(box.querySelectorAll('.picked-item-row').length > 0) return true;
+  return false;
 }
 
 /* ============================================================
@@ -690,11 +880,17 @@ async function renderToday(){
   const {startISO:monthStart, endISO:monthEnd} = vnMonthRange(currentVnYearMonth());
 
   const [ordersRes, txMonthRes, custRes, orderItemsRes] = await Promise.all([
-    sb.from('orders').select('*').order('pickup_at',{ascending:true}),
+    // B11: chỉ lấy đơn còn "sống" (đang cần theo dõi trong ngày) + giới hạn số dòng, tránh tải cả bảng.
+    sb.from('orders').select('*').in('status',['booked','picked_up','returned']).order('pickup_at',{ascending:true}).limit(500),
     sb.from('transactions').select('*').gte('occurred_at', monthStart).lt('occurred_at', monthEnd),
     sb.from('customers').select('id,name,phone'),
     sb.from('order_items').select('order_id, item:items(name)')
   ]);
+  if(ordersRes.error || txMonthRes.error || custRes.error || orderItemsRes.error){
+    el.innerHTML = `<div class="error-block">Không tải được dữ liệu — kiểm tra mạng rồi bấm Tải lại.<br><button class="btn" id="btn-today-retry">Tải lại</button></div>`;
+    document.getElementById('btn-today-retry').addEventListener('click', renderToday);
+    return;
+  }
   const orders = ordersRes.data || [];
   const txMonth = txMonthRes.data || [];
   const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
@@ -704,9 +900,19 @@ async function renderToday(){
     (itemNamesByOrder[oi.order_id] = itemNamesByOrder[oi.order_id]||[]).push(oi.item.name);
   });
 
+  const dayStartMsForTx = new Date(dayStart).getTime();
+  const dayEndMsForTx = new Date(dayEnd).getTime();
+  // B11: "Thu hôm nay" lọc client-side trên txMonth (đã scope theo tháng ở server) — hôm nay
+  // luôn nằm trong tháng hiện tại nên không cần thêm 1 round-trip server riêng.
+  const txToday = txMonth.filter(t=>{
+    const ms = new Date(t.occurred_at).getTime();
+    return ms>=dayStartMsForTx && ms<dayEndMsForTx;
+  });
+  const thuHomNay = txToday.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
   const thuThang = txMonth.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
   const chiThang = txMonth.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
   const cocGiu = orders.reduce((s,o)=>s+depositHeld(o),0);
+  const waitingDepositReturn = orders.filter(o=>o.status==='returned' && depositHeld(o) > 0);
 
   // So sánh bằng getTime() thay vì so sánh chuỗi ISO thô (finding #7): PostgREST và
   // toISOString() có thể trả về định dạng offset khác nhau (+00:00 vs .000Z) khiến so sánh
@@ -762,10 +968,31 @@ async function renderToday(){
 
   let html = '';
   html += `<div class="summary-row">
-    <div class="summary-item"><div class="lbl">Thu tháng này</div><div class="val">${money(thuThang)}</div></div>
-    <div class="summary-item"><div class="lbl">Chi tháng này</div><div class="val">${money(chiThang)}</div></div>
-    <div class="summary-item"><div class="lbl">Cọc đang giữ</div><div class="val">${money(cocGiu)}</div></div>
+    <div class="summary-item" id="tile-thu-hom-nay" style="cursor:pointer;"><div class="lbl">Thu hôm nay</div><div class="val">${money(thuHomNay)}</div></div>
+    <div class="summary-item"><div class="lbl">Thu tháng</div><div class="val">${money(thuThang)}</div></div>
   </div>`;
+  html += `<div class="summary-row">
+    <div class="summary-item"><div class="lbl">Chi tháng</div><div class="val">${money(chiThang)}</div></div>
+    <div class="summary-item" id="tile-coc-giu" style="cursor:pointer;"><div class="lbl">Cọc đang giữ</div><div class="val">${money(cocGiu)}</div><div style="font-size:11px;color:var(--muted);">(tiền cọc đang cầm của khách)</div></div>
+  </div>`;
+
+  if(waitingDepositReturn.length){
+    html += `<div class="section-title">⏳ Chờ hoàn cọc</div>`;
+    html += waitingDepositReturn.map(o=>{
+      const c = custInfo(o);
+      return `<div class="card order-card" data-order-id="${o.id}">
+        <div class="row1">
+          <span class="name">${escapeHtml(c.name)}</span>
+          <span class="time">${o.code}</span>
+        </div>
+        <div class="meta">Cọc đang giữ: ${money(depositHeld(o))}</div>
+        <div class="actions">
+          <button class="btn block-sm" data-action="quick-return-deposit" data-id="${o.id}">Hoàn cọc</button>
+          <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   if(overdue.length){
     html += `<div class="section-title">⚠️ Quá hạn</div>`;
@@ -800,6 +1027,35 @@ async function renderToday(){
   el.querySelectorAll('[data-action="open-order"]').forEach(b=>b.addEventListener('click',()=>openOrderDetail(b.dataset.id)));
   el.querySelectorAll('[data-action="booked-to-pickedup"]').forEach(b=>b.addEventListener('click',()=>flowBookedToPickedUp(b.dataset.id, renderToday)));
   el.querySelectorAll('[data-action="pickedup-to-returned"]').forEach(b=>b.addEventListener('click',()=>flowPickedUpToReturned(b.dataset.id, renderToday)));
+  el.querySelectorAll('[data-action="quick-return-deposit"]').forEach(b=>b.addEventListener('click', async ()=>{
+    const o = orders.find(x=>x.id===b.dataset.id);
+    if(!o) return;
+    const {data: tx, error} = await sb.from('transactions').select('*').eq('order_id', o.id);
+    if(error){ toastError(error); return; }
+    const remaining = orderRemaining(o, tx||[]);
+    flowReturnDeposit(o, remaining, renderToday);
+  }));
+  document.getElementById('tile-thu-hom-nay')?.addEventListener('click', ()=>{
+    cashflowDateScope = 'today';
+    switchTab('cashflow');
+  });
+  document.getElementById('tile-coc-giu')?.addEventListener('click', ()=>{
+    openDepositHeldListModal(orders, customers);
+  });
+}
+
+// C7: danh sách đơn đang giữ cọc (mã, tên khách, số cọc còn giữ) — depositHeld() GIỮ NGUYÊN công thức.
+function openDepositHeldListModal(orders, customers){
+  const held = orders.filter(o=>depositHeld(o) > 0);
+  openModal(`
+    <h3>Cọc đang giữ</h3>
+    ${held.length ? held.map(o=>{
+      const c = customers[o.customer_id] || {name:'(?)'};
+      return `<div class="kv"><span class="k">${o.code} — ${escapeHtml(c.name)}</span><span class="v">${money(depositHeld(o))}</span></div>`;
+    }).join('') : `<div class="empty-state">Không có đơn nào đang giữ cọc</div>`}
+    <div class="modal-actions"><button class="btn secondary" id="btn-close-deposit-list">Đóng</button></div>
+  `);
+  document.getElementById('btn-close-deposit-list').addEventListener('click', closeModal);
 }
 
 /* ============================================================
@@ -817,6 +1073,11 @@ async function renderOrders(){
     sb.from('customers').select('id,name,phone'),
     sb.from('order_items').select('order_id, item:items(name)')
   ]);
+  if(ordersRes.error || custRes.error || orderItemsRes.error){
+    el.innerHTML = `<div class="error-block">Không tải được dữ liệu — kiểm tra mạng rồi bấm Tải lại.<br><button class="btn" id="btn-orders-retry">Tải lại</button></div>`;
+    document.getElementById('btn-orders-retry').addEventListener('click', renderOrders);
+    return;
+  }
   const orders = ordersRes.data || [];
   const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
   const itemNamesByOrder = {};
@@ -978,8 +1239,9 @@ function wireItemPickerBlock(opts){
   // scheduleCtx=null để còn thử lại, khóa nút Lưu + hiện banner báo lỗi có nút "Thử lại".
   async function ensureScheduleCtx(){
     if(state.scheduleCtx) return state.scheduleCtx;
+    // B9: join tên khách để cảnh báo trùng lịch hiện được tên khách (không chỉ mã đơn).
     const [ordersRes, orderItemsRes] = await Promise.all([
-      sb.from('orders').select('id,code,status,pickup_at,return_due_at'),
+      sb.from('orders').select('id,code,status,pickup_at,return_due_at,customer:customers(name)'),
       sb.from('order_items').select('order_id,item_id')
     ]);
     if(ordersRes.error || orderItemsRes.error){
@@ -989,8 +1251,19 @@ function wireItemPickerBlock(opts){
       return null;
     }
     if(ctxErrorEl) ctxErrorEl.classList.add('hidden');
-    state.scheduleCtx = {orders: ordersRes.data||[], orderItems: orderItemsRes.data||[]};
+    const orders = ordersRes.data||[];
+    const nameByOrderId = {};
+    orders.forEach(o=>{ nameByOrderId[o.id] = o.customer && o.customer.name ? o.customer.name : ''; });
+    state.scheduleCtx = {orders, orderItems: orderItemsRes.data||[], nameByOrderId};
     return state.scheduleCtx;
+  }
+  // B9: nhãn cảnh báo trùng lịch — "⚠️ Trùng với đơn {tên khách} ({dd/MM} → {dd/MM})",
+  // không có tên khách thì rơi về mã đơn như cũ.
+  function conflictOrderLabel(conflict){
+    const who = (state.scheduleCtx && state.scheduleCtx.nameByOrderId[conflict.orderId]) || conflict.orderCode || '';
+    const startLabel = formatShortDateVN(new Date(conflict.busyStartMs).toISOString());
+    const endLabel = conflict.busyEndMs===Infinity ? '?' : formatShortDateVN(new Date(conflict.busyEndMs).toISOString());
+    return `⚠️ Trùng với đơn ${who} (${startLabel} → ${endLabel})`;
   }
   document.getElementById(`${opts.idPrefix}-schedule-ctx-retry`)?.addEventListener('click', async ()=>{
     await ensureScheduleCtx();
@@ -1013,7 +1286,7 @@ function wireItemPickerBlock(opts){
       const c = entry.conflict;
       let warnHtml = '';
       if(c && c.reason==='schedule'){
-        warnHtml += `<div class="picked-item-conflict-msg">⚠️ Trùng lịch với ${escapeHtml(c.orderCode||'')}</div>`;
+        warnHtml += `<div class="picked-item-conflict-msg">${escapeHtml(conflictOrderLabel(c))}</div>`;
       } else if(c && c.reason==='manual_status'){
         warnHtml += `<div class="picked-item-conflict-msg">⚠️ Đang ${MANUAL_STATUS_LABEL[c.manualStatus]||c.manualStatus}</div>`;
       }
@@ -1024,7 +1297,7 @@ function wireItemPickerBlock(opts){
       }
       return `<div class="picked-item-row ${c?'conflict':''}" data-idx="${idx}">
         <div style="flex:1;">
-          <div>${escapeHtml(entry.item.name)} <span style="color:var(--muted);font-size:12px;">(${entry.item.code})</span></div>
+          <div>${escapeHtml(entry.item.name)} <span style="color:var(--muted);font-size:13px;">(${entry.item.code})</span></div>
           ${warnHtml}
         </div>
         <input type="text" inputmode="numeric" class="picked-item-price" data-idx="${idx}" value="${Number(entry.price||0).toLocaleString('vi-VN')}">
@@ -1110,7 +1383,7 @@ function wireItemPickerBlock(opts){
     const conflict = conflictForItem(item);
     if(conflict){
       if(conflict.reason==='schedule'){
-        toast(`⚠️ Trùng lịch với ${conflict.orderCode}, không thể thêm`);
+        toast(`${conflictOrderLabel(conflict)} — không thể thêm`);
       } else {
         toast(`⚠️ Món đang ${MANUAL_STATUS_LABEL[conflict.manualStatus]||conflict.manualStatus}, không thể thêm`);
       }
@@ -1139,7 +1412,7 @@ function wireItemPickerBlock(opts){
       const {data, error} = await sb.from('items').select('*').or(`name.ilike.%${term}%,code.ilike.%${term}%`).limit(15);
       if(error){
         resultsEl.innerHTML = `<div class="item-search-result-row">Lỗi tìm kiếm, thử lại</div>`;
-        toast('Lỗi tìm món: '+error.message);
+        toast('Lỗi tìm món: '+viError(error), 4000);
         return;
       }
       const list = (data||[]).filter(it=>!state.entries.some(e=>e.item.id===it.id));
@@ -1173,7 +1446,7 @@ function wireItemPickerBlock(opts){
       buffer_hours: DEFAULT_BUFFER_BY_CATEGORY[category]
     }).select().single();
     btn.disabled = false;
-    if(error){ toast('Lỗi tạo món: '+error.message); return; }
+    if(error){ toast('Lỗi tạo món: '+viError(error), 4000); return; }
     document.getElementById(`${opts.idPrefix}-qa-name`).value = '';
     document.getElementById(`${opts.idPrefix}-qa-price`).value = '';
     quickAddBox.classList.add('hidden');
@@ -1186,6 +1459,13 @@ function wireItemPickerBlock(opts){
   return {state, recomputeAll};
 }
 
+// B3: "Nhận lúc" mặc định = hôm nay, giờ tròn kế tiếp (VN). Múi giờ VN là UTC+7 cố định (không DST)
+// nên mốc giờ tròn theo UTC cũng chính là mốc giờ tròn theo giờ VN.
+function defaultPickupLocalInput(){
+  const now = Date.now();
+  const nextRoundHourMs = Math.ceil(now/3600000)*3600000;
+  return isoToVnLocalInput(new Date(nextRoundHourMs).toISOString());
+}
 function openNewOrderModal(){
   openModal(`
     <h3>Đơn thuê mới</h3>
@@ -1193,12 +1473,16 @@ function openNewOrderModal(){
       <div class="field"><label>Tên khách *</label><input type="text" id="f-name" required></div>
       <div class="field"><label>Số điện thoại</label><input type="tel" id="f-phone"></div>
       <div class="field" id="known-cust-note" style="display:none;color:var(--ok);font-size:13px;"></div>
-      <div class="field"><label>Nhận lúc *</label><input type="datetime-local" id="f-pickup" required></div>
-      <div class="field"><label>Trả lúc *</label><input type="datetime-local" id="f-return" required></div>
+      <div class="field"><label>Nhận lúc *</label><input type="datetime-local" id="f-pickup" value="${defaultPickupLocalInput()}" required></div>
+      <div class="chips">
+        <button type="button" class="chip" id="chip-pickup-today">Hôm nay</button>
+        <button type="button" class="chip" id="chip-pickup-tomorrow">Ngày mai</button>
+      </div>
+      <div class="field"><label>Trả lúc</label><input type="datetime-local" id="f-return"></div>
       ${itemPickerBlockHtml('f')}
       <div class="field"><label>Ghi chú món/đồ ngoài kho</label><textarea id="f-items"></textarea></div>
-      <div class="field"><label>Tiền thuê *</label><input type="text" inputmode="numeric" id="f-price" required></div>
-      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="f-deposit" value="0"></div>
+      <div class="field"><label>Tiền thuê</label><input type="text" inputmode="numeric" id="f-price"><div class="amount-words" id="f-price-words"></div></div>
+      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="f-deposit" value="0"><div class="amount-words" id="f-deposit-words"></div></div>
       <div class="field">
         <label>Hình thức cọc</label>
         <select id="f-deposit-type">
@@ -1209,13 +1493,16 @@ function openNewOrderModal(){
         </select>
       </div>
       <div class="field"><label>Ghi chú</label><textarea id="f-note"></textarea></div>
-      <div class="modal-actions">
+      <div class="field"><label><input type="checkbox" id="f-giao-ngay"> Giao đồ luôn (khách lấy ngay)</label></div>
+      <div class="modal-actions sticky-submit">
         <button type="submit" class="btn">Lưu đơn</button>
       </div>
     </form>
   `);
   attachMoneyFormatting(document.getElementById('f-price'));
   attachMoneyFormatting(document.getElementById('f-deposit'));
+  attachAmountInWords(document.getElementById('f-price'), document.getElementById('f-price-words'));
+  attachAmountInWords(document.getElementById('f-deposit'), document.getElementById('f-deposit-words'));
 
   const itemPicker = wireItemPickerBlock({
     idPrefix:'f', pickupId:'f-pickup', returnId:'f-return',
@@ -1223,8 +1510,35 @@ function openNewOrderModal(){
     excludeOrderId:null, initialEntries:[],
     saveBtnSelector:'#new-order-form button[type=submit]'
   });
-  document.getElementById('f-pickup').addEventListener('change', ()=>itemPicker.recomputeAll());
+
+  // B3: "Trả lúc" tự = "Nhận lúc" + 24h khi đang trống hoặc chưa bị người dùng sửa tay.
+  let returnDirty = false;
+  document.getElementById('f-return').addEventListener('input', ()=>{ returnDirty = true; });
+  function autoFillReturn(){
+    if(returnDirty && document.getElementById('f-return').value) return;
+    const pickupVal = document.getElementById('f-pickup').value;
+    if(!pickupVal) return;
+    const pickupISO = vnLocalInputToISO(pickupVal);
+    if(!pickupISO) return;
+    const returnMs = new Date(pickupISO).getTime() + 24*3600000;
+    document.getElementById('f-return').value = isoToVnLocalInput(new Date(returnMs).toISOString());
+  }
+  document.getElementById('f-pickup').addEventListener('change', ()=>{ autoFillReturn(); itemPicker.recomputeAll(); });
   document.getElementById('f-return').addEventListener('change', ()=>itemPicker.recomputeAll());
+  autoFillReturn();
+  itemPicker.recomputeAll();
+
+  // B3: chip [Hôm nay]/[Ngày mai] chỉ đổi phần NGÀY, giữ nguyên giờ đang chọn.
+  function setPickupDateKeepTime(targetDateStr){
+    const inp = document.getElementById('f-pickup');
+    const timePart = (inp.value && inp.value.split('T')[1]) || '00:00';
+    inp.value = `${targetDateStr}T${timePart}`;
+    inp.dispatchEvent(new Event('change'));
+  }
+  document.getElementById('chip-pickup-today').addEventListener('click', ()=>setPickupDateKeepTime(vnDateStr()));
+  document.getElementById('chip-pickup-tomorrow').addEventListener('click', ()=>{
+    setPickupDateKeepTime(vnDateStr(new Date(Date.now()+24*3600000)));
+  });
 
   const phoneInput = document.getElementById('f-phone');
   let foundCustomerId = null;
@@ -1246,20 +1560,30 @@ function openNewOrderModal(){
   document.getElementById('new-order-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const btn = e.target.querySelector('button[type=submit]');
+    const giaoNgay = document.getElementById('f-giao-ngay').checked;
     const name = document.getElementById('f-name').value.trim();
     const phone = phoneInput.value.trim();
     const items = document.getElementById('f-items').value.trim();
     const pickup = document.getElementById('f-pickup').value;
-    const ret = document.getElementById('f-return').value;
+    let ret = document.getElementById('f-return').value;
     const price = parseMoneyInput(document.getElementById('f-price').value);
     const deposit = parseMoneyInput(document.getElementById('f-deposit').value);
     const depositType = document.getElementById('f-deposit-type').value;
-    const note = document.getElementById('f-note').value.trim();
+    let note = document.getElementById('f-note').value.trim();
 
-    if(!pickup || !ret){ toast('Nhập đủ ngày giờ nhận/trả'); return; }
+    if(!pickup){ toast('Nhập giờ nhận đồ'); return; }
+    // B8: "Trả lúc" trống khi submit → tự = nhận + 24h (không chặn lưu đơn tạm chưa chốt giờ trả).
+    if(!ret){
+      const pickupISOTmp = vnLocalInputToISO(pickup);
+      ret = isoToVnLocalInput(new Date(new Date(pickupISOTmp).getTime() + 24*3600000).toISOString());
+    }
     const pickupISO = vnLocalInputToISO(pickup);
     const returnISO = vnLocalInputToISO(ret);
     if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
+    // B8: tiền thuê = 0 (đơn giữ chỗ miệng, chưa chốt giá) → gắn nhãn rõ ràng vào đầu ghi chú.
+    if(price === 0){
+      note = note ? `[Đơn tạm — chưa chốt giá] ${note}` : '[Đơn tạm — chưa chốt giá]';
+    }
 
     // Chặn lưu nếu có món đang chọn bị trùng lịch/không khả dụng (phòng vệ thêm ngoài việc disable nút, finding-style)
     itemPicker.recomputeAll();
@@ -1278,7 +1602,7 @@ function openNewOrderModal(){
       const insertPayload = {name};
       if(phone) insertPayload.phone = phone;
       const {data:newCust, error:custErr} = await sb.from('customers').insert(insertPayload).select().single();
-      if(custErr){ toast('Lỗi tạo khách: '+custErr.message); btn.disabled = false; return; }
+      if(custErr){ toast('Lỗi tạo khách: '+viError(custErr), 4000); btn.disabled = false; return; }
       customerId = newCust.id;
     }
 
@@ -1292,15 +1616,21 @@ function openNewOrderModal(){
       deposit_type: depositType,
       note: note || null
     }).select().single();
-    if(error){ toast('Lỗi tạo đơn: '+error.message); btn.disabled = false; return; }
+    if(error){ toast('Lỗi tạo đơn: '+viError(error), 4000); btn.disabled = false; return; }
     if(itemPicker.state.entries.length){
       const rows = itemPicker.state.entries.map(e=>({order_id:newOrder.id, item_id:e.item.id, price:Number(e.price||0)}));
       const {error: oiErr} = await sb.from('order_items').insert(rows);
-      if(oiErr){ toast('Đã tạo đơn nhưng lỗi lưu món: '+oiErr.message); }
+      if(oiErr){ toast('Đã tạo đơn nhưng lỗi lưu món: '+viError(oiErr), 4000); }
     }
     closeModal();
-    toast('Đã tạo đơn mới');
-    renderOrders();
+    // B7: "Giao đồ luôn" → lưu đơn xong tự chạy flow giao đồ (modal thu tiền), thay vì phải tự đi tìm lại đơn.
+    if(giaoNgay){
+      toast('Đã tạo đơn mới');
+      flowBookedToPickedUp(newOrder.id, ()=>renderOrders());
+    } else {
+      toast('Đã tạo đơn mới');
+      renderOrders();
+    }
   });
 }
 
@@ -1323,6 +1653,7 @@ async function openOrderDetail(orderId){
   }
   if(order.status === 'picked_up'){
     actionsHtml += `<button class="btn block-sm" data-act="pickedup-to-returned">Đã nhận lại đồ</button>`;
+    actionsHtml += `<button class="btn ghost block-sm" data-act="revert-to-booked">↩ Quay lại: chưa giao đồ</button>`;
   }
   if(order.status === 'returned' && isCashDeposit(order)){
     actionsHtml += `<button class="btn block-sm" data-act="return-deposit">Hoàn cọc</button>`;
@@ -1330,12 +1661,20 @@ async function openOrderDetail(orderId){
     // Đơn đã trả đồ nhưng không (còn) có cọc tiền mặt (vd: sửa đơn đổi cọc về none sau khi trả đồ) → không kẹt vĩnh viễn (finding #5)
     actionsHtml += `<button class="btn block-sm" data-act="close-order">Đóng đơn</button>`;
   }
+  if(order.status === 'returned'){
+    actionsHtml += `<button class="btn ghost block-sm" data-act="revert-to-pickedup">↩ Quay lại: khách đang giữ đồ</button>`;
+  }
+  if(order.status === 'closed'){
+    actionsHtml += `<button class="btn ghost block-sm" data-act="reopen-to-returned">Mở lại đơn</button>`;
+  }
+  if(order.status === 'cancelled'){
+    actionsHtml += `<button class="btn ghost block-sm" data-act="reopen-to-booked">Mở lại đơn</button>`;
+  }
   if(remaining > 0 && !['booked','cancelled'].includes(order.status)){
     actionsHtml += `<button class="btn secondary block-sm" data-act="collect-remaining">Thu nốt ${money(remaining)}</button>`;
   }
-  if(!['closed','cancelled'].includes(order.status)){
-    actionsHtml += `<button class="btn secondary block-sm" data-act="edit-order">Sửa đơn</button>`;
-  }
+  // A5: nút "Sửa đơn" hiện ở MỌI trạng thái (trước đây ẩn ở closed/cancelled).
+  actionsHtml += `<button class="btn secondary block-sm" data-act="edit-order">Sửa đơn</button>`;
 
   openModal(`
     <h3>${order.code}</h3>
@@ -1354,7 +1693,7 @@ async function openOrderDetail(orderId){
     ${order.deposit_returned_amount!=null ? `<div class="kv"><span class="k">Đã hoàn cọc</span><span class="v">${money(order.deposit_returned_amount)} lúc ${formatDateTimeVN(order.deposit_returned_at)}</span></div>` : ''}
     ${order.note ? `<div class="kv"><span class="k">Ghi chú</span><span class="v">${escapeHtml(order.note)}</span></div>` : ''}
 
-    <div class="section-title">Giao dịch gắn đơn</div>
+    <div class="section-title">Tiền đã thu/chi của đơn này</div>
     ${orderTx.length ? orderTx.map(t=>`
       <div class="tx-row">
         <div><div>${CAT_LABEL[t.category]||t.category}</div><div class="cat">${formatDateTimeVN(t.occurred_at)}</div></div>
@@ -1377,11 +1716,67 @@ async function openOrderDetail(orderId){
     const btn = box.querySelector('[data-act="close-order"]');
     btn.disabled = true;
     const {error} = await sb.from('orders').update({status:'closed'}).eq('id', order.id);
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
     closeModal(); toast('Đã đóng đơn');
     if(currentTab==='orders') renderOrders(); else renderToday();
   });
   box.querySelector('[data-act="edit-order"]')?.addEventListener('click', ()=>openEditOrderModal(order, customer));
+
+  // A5: đường lùi trạng thái (nút phụ, màu ghost, kèm confirm) — không đụng orderRemaining/depositHeld/isCashDeposit.
+  box.querySelector('[data-act="revert-to-booked"]')?.addEventListener('click', async ()=>{
+    if(!confirm('Quay lại trạng thái "chưa giao đồ"?')) return;
+    const btn = box.querySelector('[data-act="revert-to-booked"]');
+    btn.disabled = true;
+    // Heuristic: không có cột liên kết trực tiếp giao dịch với flow đã tạo ra nó trong schema hiện
+    // tại → coi khoản thu tien_thue GẦN NHẤT (orderTx đã sắp occurred_at giảm dần) là khoản ghi khi
+    // giao đồ. Đúng với xác suất rất cao vì revert thường bấm ngay sau khi lỡ tay.
+    const thueTx = orderTx.filter(t=>t.type==='thu' && t.category==='tien_thue');
+    const latestThueTx = thueTx.length ? thueTx[0] : null;
+    let deleteTx = false;
+    if(latestThueTx){
+      deleteTx = confirm(`Xóa luôn khoản thu ${money(latestThueTx.amount)} đã ghi khi giao đồ? OK = Xóa, Cancel = Giữ lại.`);
+    }
+    if(deleteTx){
+      const {error: delErr} = await sb.from('transactions').delete().eq('id', latestThueTx.id);
+      if(delErr){ toast('Lỗi xóa giao dịch: '+viError(delErr), 4000); btn.disabled = false; return; }
+    }
+    const {error} = await sb.from('orders').update({status:'booked'}).eq('id', order.id);
+    if(error){ toastError(error); btn.disabled = false; return; }
+    closeModal(); toast('Đã quay lại: chưa giao đồ');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
+  box.querySelector('[data-act="revert-to-pickedup"]')?.addEventListener('click', async ()=>{
+    if(!confirm('Quay lại trạng thái "khách đang giữ đồ"?')) return;
+    const btn = box.querySelector('[data-act="revert-to-pickedup"]');
+    btn.disabled = true;
+    const {error} = await sb.from('orders').update({status:'picked_up', returned_at:null}).eq('id', order.id);
+    if(error){ toastError(error); btn.disabled = false; return; }
+    closeModal(); toast('Đã quay lại: khách đang giữ đồ');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
+  box.querySelector('[data-act="reopen-to-returned"]')?.addEventListener('click', async ()=>{
+    if(!confirm('Mở lại đơn (về trạng thái "đã trả đồ")? Kiểm tra lại phần cọc và giao dịch nếu cần sửa.')) return;
+    const btn = box.querySelector('[data-act="reopen-to-returned"]');
+    btn.disabled = true;
+    // A5: KHÔNG tự động đụng deposit_returned_amount/at hay bất kỳ giao dịch nào.
+    const {error} = await sb.from('orders').update({status:'returned'}).eq('id', order.id);
+    if(error){ toastError(error); btn.disabled = false; return; }
+    closeModal(); toast('Đã mở lại đơn');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
+  box.querySelector('[data-act="reopen-to-booked"]')?.addEventListener('click', async ()=>{
+    const hasPhiHuy = orderTx.some(t=>t.category==='phi_huy');
+    const msg = hasPhiHuy
+      ? 'Mở lại đơn (về trạng thái "đã đặt")? Đơn này từng có khoản "Phí hủy" — vào tab Thu chi để tự xử lý giao dịch đó nếu cần. Kiểm tra lại phần cọc và giao dịch nếu cần sửa.'
+      : 'Mở lại đơn (về trạng thái "đã đặt")? Kiểm tra lại phần cọc và giao dịch nếu cần sửa.';
+    if(!confirm(msg)) return;
+    const btn = box.querySelector('[data-act="reopen-to-booked"]');
+    btn.disabled = true;
+    const {error} = await sb.from('orders').update({status:'booked'}).eq('id', order.id);
+    if(error){ toastError(error); btn.disabled = false; return; }
+    closeModal(); toast('Đã mở lại đơn');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
 }
 
 /* ---------- Flow: booked -> picked_up (thu tiền thuê) ---------- */
@@ -1407,7 +1802,7 @@ function flowBookedToPickedUp(orderId, onDone){
       const btn = document.getElementById('btn-skip-collect');
       btn.disabled = true;
       const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+      if(error){ toastError(error); btn.disabled = false; return; }
       closeModal(); toast('Đã giao đồ'); onDone();
     });
     document.getElementById('btn-confirm-collect').addEventListener('click', async ()=>{
@@ -1419,10 +1814,10 @@ function flowBookedToPickedUp(orderId, onDone){
         const {error:txErr} = await sb.from('transactions').insert({
           type:'thu', category:'tien_thue', amount, order_id: orderId
         });
-        if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
+        if(txErr){ toastError(txErr); btn.disabled = false; return; }
       }
       const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+      if(error){ toastError(error); btn.disabled = false; return; }
       closeModal(); toast('Đã giao đồ'); onDone();
     });
   });
@@ -1444,39 +1839,116 @@ function flowCollectRemaining(order, remaining, onDone){
     if(amount > remaining){ toast('Số tiền thu vượt quá còn thiếu ('+money(remaining)+')'); return; }
     btn.disabled = true;
     const {error} = await sb.from('transactions').insert({type:'thu',category:'tien_thue',amount,order_id:order.id});
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
     closeModal(); toast('Đã thu nốt'); onDone();
   });
 }
 
 /* ---------- Flow: picked_up -> returned (+ auto closed nếu không cọc tiền mặt) ---------- */
+// Định dạng "trễ X" cho modal thu phí trễ (B5) — hiển thị thuần túy, không phải 1 trong 3 hàm lịch thuần.
+function formatOverdueDuration(returnDueAt){
+  const diffMs = Date.now() - new Date(returnDueAt).getTime();
+  const hours = Math.floor(diffMs/3600000);
+  if(hours < 1){
+    const minutes = Math.max(0, Math.floor(diffMs/60000));
+    return `${minutes} phút`;
+  }
+  if(hours < 24) return `${hours} giờ`;
+  const days = Math.floor(hours/24);
+  return `${days} ngày`;
+}
 function flowPickedUpToReturned(orderId, onDone){
-  sb.from('orders').select('*').eq('id',orderId).single().then(async ({data:order})=>{
-    const nowISO = new Date().toISOString();
-    if(isCashDeposit(order)){
-      const {error} = await sb.from('orders').update({status:'returned', returned_at: nowISO}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); return; }
-      toast('Đã nhận lại đồ. Còn cọc cần hoàn.');
-      onDone();
+  Promise.all([
+    sb.from('orders').select('*').eq('id',orderId).single(),
+    sb.from('order_items').select('item_id, item:items(id,buffer_hours)').eq('order_id', orderId)
+  ]).then(([{data:order}, {data:orderItemsRows}])=>{
+    const orderItemsList = (orderItemsRows||[]).filter(oi=>oi.item);
+    const isOverdue = order.status==='picked_up' && new Date(order.return_due_at).getTime() < Date.now();
+
+    if(isOverdue){
+      // B5: đơn quá hạn → hỏi thu phí trễ trước khi chuyển trạng thái.
+      openModal(`
+        <h3>Khách trả trễ ${formatOverdueDuration(order.return_due_at)}</h3>
+        <p>Hạn trả: ${formatDateTimeVN(order.return_due_at)}. Thu phí trễ?</p>
+        <div class="field"><label>Số tiền thu phí trễ</label><input type="text" inputmode="numeric" id="f-latefee" value="0"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" id="btn-skip-latefee">Bỏ qua</button>
+          <button class="btn" id="btn-confirm-latefee">Thu</button>
+        </div>
+      `);
+      attachMoneyFormatting(document.getElementById('f-latefee'));
+      document.getElementById('btn-skip-latefee').addEventListener('click', ()=>{
+        proceedAfterReturn(order, orderItemsList, onDone);
+      });
+      document.getElementById('btn-confirm-latefee').addEventListener('click', async ()=>{
+        const btn = document.getElementById('btn-confirm-latefee');
+        const amount = parseMoneyInput(document.getElementById('f-latefee').value);
+        btn.disabled = true;
+        if(amount > 0){
+          const {error:txErr} = await sb.from('transactions').insert({type:'thu', category:'phi_tre', amount, order_id: order.id});
+          if(txErr){ toastError(txErr); btn.disabled = false; return; }
+        }
+        proceedAfterReturn(order, orderItemsList, onDone);
+      });
     } else {
-      const {error} = await sb.from('orders').update({status:'closed', returned_at: nowISO}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); return; }
-      toast('Đã nhận lại đồ. Đơn hoàn tất (không có cọc tiền mặt).');
-      onDone();
+      // Đơn đúng hạn giữ hành vi 1 chạm như cũ (không hỏi phí trễ).
+      proceedAfterReturn(order, orderItemsList, onDone);
     }
   });
+}
+// Chuyển trạng thái sau khi nhận lại đồ (returned/closed tùy isCashDeposit — GIỮ NGUYÊN công thức),
+// sau đó B6: nếu đơn có món từ kho với buffer_hours > 0 thì hỏi có cần đánh dấu đang giặt không.
+async function proceedAfterReturn(order, orderItemsList, onDone){
+  const nowISO = new Date().toISOString();
+  const newStatus = isCashDeposit(order) ? 'returned' : 'closed';
+  const {error} = await sb.from('orders').update({status:newStatus, returned_at: nowISO}).eq('id',order.id);
+  if(error){ toastError(error); return; }
+  const msg = isCashDeposit(order) ? 'Đã nhận lại đồ. Còn cọc cần hoàn.' : 'Đã nhận lại đồ. Đơn hoàn tất (không có cọc tiền mặt).';
+  const itemsNeedingLaundryCheck = orderItemsList.filter(oi=>Number(oi.item && oi.item.buffer_hours||0) > 0);
+  if(itemsNeedingLaundryCheck.length){
+    closeModal();
+    toast(msg);
+    openModal(`
+      <h3>Món cần giặt?</h3>
+      <p>Đơn có ${itemsNeedingLaundryCheck.length} món có thời gian nghỉ giặt sau khi trả.</p>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btn-no-laundry">Không</button>
+        <button class="btn" id="btn-yes-laundry">Có — đánh dấu đang giặt</button>
+      </div>
+    `);
+    document.getElementById('btn-no-laundry').addEventListener('click', ()=>{ closeModal(); onDone(); });
+    document.getElementById('btn-yes-laundry').addEventListener('click', async ()=>{
+      const btn = document.getElementById('btn-yes-laundry');
+      btn.disabled = true;
+      const itemIds = itemsNeedingLaundryCheck.map(oi=>oi.item_id);
+      const {error: updErr} = await sb.from('items').update({manual_status:'giat'}).in('id', itemIds);
+      if(updErr){ toastError(updErr); btn.disabled = false; return; }
+      closeModal(); toast('Đã đánh dấu đang giặt'); onDone();
+    });
+  } else {
+    closeModal();
+    toast(msg);
+    onDone();
+  }
 }
 
 /* ---------- Flow: hoàn cọc (returned -> closed) ---------- */
 function flowReturnDeposit(order, remaining, onDone){
   // Cảnh báo nếu đơn còn thiếu tiền thuê trước khi hoàn cọc (finding #16)
   const warnHtml = remaining > 0 ? `<p class="remain-warn">⚠️ Đơn còn thiếu ${money(remaining)}</p>` : '';
+  const deposit = Number(order.deposit_amount);
+  // B2: mặc định hoàn = cọc − còn thiếu (không âm) khi đơn còn thiếu tiền thuê; không thiếu thì hoàn đủ cọc như cũ.
+  const defaultRefund = remaining > 0 ? Math.max(deposit - remaining, 0) : deposit;
+  const deductCheckboxHtml = remaining > 0
+    ? `<div class="field"><label><input type="checkbox" id="f-deduct-rent" checked> Trừ ${money(Math.min(remaining, deposit))} tiền thuê còn thiếu vào cọc</label></div>`
+    : '';
   openModal(`
     <h3>Hoàn cọc</h3>
-    <p>Đơn <b>${order.code}</b> — cọc: ${money(order.deposit_amount)}</p>
+    <p>Đơn <b>${order.code}</b> — cọc: ${money(deposit)}</p>
     ${warnHtml}
-    <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
-    <div class="field"><label>Lý do (bắt buộc nếu hoàn thiếu)</label><textarea id="f-refund-reason"></textarea></div>
+    ${deductCheckboxHtml}
+    <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${defaultRefund.toLocaleString('vi-VN')}"></div>
+    <div class="field"><label>Lý do (bắt buộc nếu giữ thêm tiền ngoài phần trừ nợ tiền thuê)</label><textarea id="f-refund-reason"></textarea></div>
     <div class="modal-actions"><button class="btn" id="btn-confirm-refund">Xác nhận hoàn cọc & đóng đơn</button></div>
   `);
   attachMoneyFormatting(document.getElementById('f-refund'));
@@ -1484,24 +1956,35 @@ function flowReturnDeposit(order, remaining, onDone){
     const btn = document.getElementById('btn-confirm-refund');
     const refund = parseMoneyInput(document.getElementById('f-refund').value);
     const reason = document.getElementById('f-refund-reason').value.trim();
-    const deposit = Number(order.deposit_amount);
+    const deductRentChecked = remaining > 0 && !!document.getElementById('f-deduct-rent')?.checked;
     if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
-    if(refund < deposit && !reason){ toast('Nhập lý do khi hoàn thiếu cọc'); return; }
-    btn.disabled = true;
     const diff = deposit - refund;
-    if(diff > 0){
-      const {error:txErr} = await sb.from('transactions').insert({
-        type:'thu', category:'tien_den', amount: diff, order_id: order.id,
+    // B2: phần trừ khỏi cọc (diff) tách làm 2 — trước hết bù tiền thuê còn thiếu (ghi tien_thue,
+    // tối đa = min(còn thiếu, diff)), phần dư ra (nếu có, do hư hỏng...) vẫn ghi tien_den như cũ.
+    const deductedForRent = deductRentChecked ? Math.min(remaining, diff) : 0;
+    const deductedForDamage = diff - deductedForRent;
+    if(deductedForDamage > 0 && !reason){ toast('Nhập lý do khi giữ thêm tiền ngoài phần trừ nợ tiền thuê'); return; }
+    btn.disabled = true;
+    if(deductedForRent > 0){
+      const {error:txErr1} = await sb.from('transactions').insert({
+        type:'thu', category:'tien_thue', amount: deductedForRent, order_id: order.id,
+        note: 'Trừ tiền thuê còn thiếu vào cọc'
+      });
+      if(txErr1){ toastError(txErr1); btn.disabled = false; return; }
+    }
+    if(deductedForDamage > 0){
+      const {error:txErr2} = await sb.from('transactions').insert({
+        type:'thu', category:'tien_den', amount: deductedForDamage, order_id: order.id,
         note: reason
       });
-      if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
+      if(txErr2){ toastError(txErr2); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({
       deposit_returned_amount: refund,
       deposit_returned_at: new Date().toISOString(),
       status: 'closed'
     }).eq('id', order.id);
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
     closeModal(); toast('Đã hoàn cọc, đơn hoàn tất'); onDone();
   });
 }
@@ -1534,14 +2017,14 @@ function flowCancelOrder(order, onDone){
         const {error:txErr} = await sb.from('transactions').insert({
           type:'thu', category:'phi_huy', amount: kept, order_id: order.id, note: reason
         });
-        if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
+        if(txErr){ toastError(txErr); btn.disabled = false; return; }
       }
       const {error} = await sb.from('orders').update({
         status:'cancelled',
         deposit_returned_amount: refund,
         deposit_returned_at: new Date().toISOString()
       }).eq('id', order.id);
-      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+      if(error){ toastError(error); btn.disabled = false; return; }
       closeModal(); toast('Đã hủy đơn'); onDone();
     });
   } else {
@@ -1554,7 +2037,7 @@ function flowCancelOrder(order, onDone){
       const btn = document.getElementById('btn-confirm-cancel2');
       btn.disabled = true;
       const {error} = await sb.from('orders').update({status:'cancelled'}).eq('id', order.id);
-      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+      if(error){ toastError(error); btn.disabled = false; return; }
       closeModal(); toast('Đã hủy đơn'); onDone();
     });
   }
@@ -1572,8 +2055,8 @@ async function openEditOrderModal(order, customer){
       <div class="field"><label>Trả lúc</label><input type="datetime-local" id="e-return" value="${isoToVnLocalInput(order.return_due_at)}"></div>
       ${itemPickerBlockHtml('e')}
       <div class="field"><label>Ghi chú món/đồ ngoài kho</label><textarea id="e-items">${escapeHtml(order.items_text||'')}</textarea></div>
-      <div class="field"><label>Tiền thuê</label><input type="text" inputmode="numeric" id="e-price" value="${Number(order.rental_price).toLocaleString('vi-VN')}"></div>
-      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="e-deposit" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
+      <div class="field"><label>Tiền thuê</label><input type="text" inputmode="numeric" id="e-price" value="${Number(order.rental_price).toLocaleString('vi-VN')}"><div class="amount-words" id="e-price-words"></div></div>
+      <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="e-deposit" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"><div class="amount-words" id="e-deposit-words"></div></div>
       <div class="field">
         <label>Hình thức cọc</label>
         <select id="e-deposit-type">
@@ -1584,11 +2067,13 @@ async function openEditOrderModal(order, customer){
         </select>
       </div>
       <div class="field"><label>Ghi chú</label><textarea id="e-note">${escapeHtml(order.note||'')}</textarea></div>
-      <div class="modal-actions"><button type="submit" class="btn">Lưu thay đổi</button></div>
+      <div class="modal-actions sticky-submit"><button type="submit" class="btn">Lưu thay đổi</button></div>
     </form>
   `);
   attachMoneyFormatting(document.getElementById('e-price'));
   attachMoneyFormatting(document.getElementById('e-deposit'));
+  attachAmountInWords(document.getElementById('e-price'), document.getElementById('e-price-words'));
+  attachAmountInWords(document.getElementById('e-deposit'), document.getElementById('e-deposit-words'));
 
   const itemPicker = wireItemPickerBlock({
     idPrefix:'e', pickupId:'e-pickup', returnId:'e-return',
@@ -1626,7 +2111,7 @@ async function openEditOrderModal(order, customer){
         name: document.getElementById('e-name').value.trim(),
         phone: document.getElementById('e-phone').value.trim() || null
       }).eq('id', customer.id);
-      if(custErr){ toast('Lỗi cập nhật khách: '+custErr.message); btn.disabled = false; return; }
+      if(custErr){ toast('Lỗi cập nhật khách: '+viError(custErr), 4000); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({
       items_text: items || null,
@@ -1637,7 +2122,7 @@ async function openEditOrderModal(order, customer){
       deposit_type: document.getElementById('e-deposit-type').value,
       note: document.getElementById('e-note').value.trim() || null
     }).eq('id', order.id);
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
 
     // audit-phase2 #2: đồng bộ order_items bằng DIFF (chỉ xóa món bị bỏ, thêm món mới, cập nhật
     // giá món đổi) thay vì xóa hết rồi insert lại — bản cũ nếu insert lỗi giữa chừng thì mất SẠCH
@@ -1646,7 +2131,7 @@ async function openEditOrderModal(order, customer){
     // tránh tính diff trên dữ liệu cũ). Bất kỳ bước nào lỗi → GIỮ MODAL MỞ, giữ nguyên state đã
     // chọn, toast lỗi rõ ràng, KHÔNG closeModal, để người dùng có thể bấm Lưu lại ngay.
     const {data: freshOrderItems, error: fetchErr} = await sb.from('order_items').select('item_id, price').eq('order_id', order.id);
-    if(fetchErr){ toast('Lỗi đọc dữ liệu món hiện tại, chưa lưu món — thử lại: '+fetchErr.message); btn.disabled = false; return; }
+    if(fetchErr){ toast('Lỗi đọc dữ liệu món hiện tại, chưa lưu món — thử lại: '+viError(fetchErr), 4000); btn.disabled = false; return; }
 
     const existingMap = new Map((freshOrderItems||[]).map(oi=>[oi.item_id, oi]));
     const currentIds = new Set(itemPicker.state.entries.map(en=>en.item.id));
@@ -1659,16 +2144,16 @@ async function openEditOrderModal(order, customer){
 
     if(idsToDelete.length){
       const {error: delErr} = await sb.from('order_items').delete().eq('order_id', order.id).in('item_id', idsToDelete);
-      if(delErr){ toast('Lỗi đồng bộ món (xóa món bị bỏ): '+delErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
+      if(delErr){ toast('Lỗi đồng bộ món (xóa món bị bỏ): '+viError(delErr)+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.', 4000); btn.disabled = false; return; }
     }
     if(entriesToInsert.length){
       const rows = entriesToInsert.map(en=>({order_id:order.id, item_id:en.item.id, price:Number(en.price||0)}));
       const {error: insErr} = await sb.from('order_items').insert(rows);
-      if(insErr){ toast('Lỗi đồng bộ món (thêm món mới): '+insErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
+      if(insErr){ toast('Lỗi đồng bộ món (thêm món mới): '+viError(insErr)+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.', 4000); btn.disabled = false; return; }
     }
     for(const en of entriesToUpdate){
       const {error: updErr} = await sb.from('order_items').update({price:Number(en.price||0)}).eq('order_id', order.id).eq('item_id', en.item.id);
-      if(updErr){ toast('Lỗi đồng bộ món (cập nhật giá): '+updErr.message+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.'); btn.disabled = false; return; }
+      if(updErr){ toast('Lỗi đồng bộ món (cập nhật giá): '+viError(updErr)+' — thông tin đơn đã lưu, bấm Lưu lại để thử đồng bộ món.', 4000); btn.disabled = false; return; }
     }
 
     closeModal(); toast('Đã lưu');
@@ -1682,6 +2167,7 @@ async function openEditOrderModal(order, customer){
 let khoSearchTerm = '';
 let khoFilterCategory = 'all';
 let khoFilterStatus = 'all';
+let khoDateStr = vnDateStr();
 
 async function renderKho(){
   const el = document.getElementById('tab-content');
@@ -1692,11 +2178,17 @@ async function renderKho(){
     sb.from('orders').select('id,code,status,pickup_at,return_due_at'),
     sb.from('order_items').select('order_id,item_id')
   ]);
+  if(itemsRes.error || ordersRes.error || orderItemsRes.error){
+    el.innerHTML = `<div class="error-block">Không tải được dữ liệu — kiểm tra mạng rồi bấm Tải lại.<br><button class="btn" id="btn-kho-retry">Tải lại</button></div>`;
+    document.getElementById('btn-kho-retry').addEventListener('click', renderKho);
+    return;
+  }
   const items = itemsRes.data || [];
   const orders = ordersRes.data || [];
   const orderItems = orderItemsRes.data || [];
 
   let html = `<div class="fab-row"><button class="btn" id="btn-add-item">+ Thêm món</button></div>`;
+  html += `<div class="field"><label>Còn trống ngày</label><input type="date" id="kho-date" value="${khoDateStr}"></div>`;
   html += `<div class="filter-row"><input type="text" id="kho-search" placeholder="Tìm tên / mã / size" value="${escapeHtml(khoSearchTerm)}"></div>`;
   html += `<div class="chips" id="kho-cat-chips">
     <button type="button" class="chip ${khoFilterCategory==='all'?'active':''}" data-cat="all">Tất cả loại</button>
@@ -1713,6 +2205,10 @@ async function renderKho(){
   el.innerHTML = html;
 
   document.getElementById('btn-add-item').addEventListener('click', ()=>openAddItemModal());
+  document.getElementById('kho-date').addEventListener('change', (e)=>{
+    khoDateStr = e.target.value || vnDateStr();
+    paintItemGrid(items, orders, orderItems);
+  });
   document.getElementById('kho-search').addEventListener('input', (e)=>{
     khoSearchTerm = e.target.value;
     paintItemGrid(items, orders, orderItems);
@@ -1739,11 +2235,11 @@ async function renderKho(){
 
 function paintItemGrid(items, orders, orderItems){
   const gridEl = document.getElementById('kho-grid');
-  const nowMs = Date.now();
+  const dateStr = khoDateStr || vnDateStr();
   const term = khoSearchTerm.trim().toLowerCase();
   const filtered = items.filter(it=>{
     if(khoFilterCategory!=='all' && it.category!==khoFilterCategory) return false;
-    const status = computeItemStatus(it, orders, orderItems, nowMs);
+    const status = computeItemStatusForDate(it, orders, orderItems, dateStr);
     if(khoFilterStatus!=='all' && status.color!==khoFilterStatus) return false;
     if(term){
       const hay = `${it.name} ${it.code} ${it.size||''}`.toLowerCase();
@@ -1751,10 +2247,17 @@ function paintItemGrid(items, orders, orderItems){
     }
     return true;
   });
-  if(!filtered.length){ gridEl.innerHTML = `<div class="empty-state">Không có món nào</div>`; return; }
+  if(!filtered.length){
+    // C2: tách "kho rỗng thật" khỏi "tìm/lọc không ra"
+    const isFilteredEmpty = term || khoFilterCategory!=='all' || khoFilterStatus!=='all';
+    gridEl.innerHTML = isFilteredEmpty
+      ? `<div class="empty-state">${term ? `Không tìm thấy '${escapeHtml(khoSearchTerm.trim())}'` : 'Không có món nào khớp bộ lọc'}</div>`
+      : `<div class="empty-state">Kho đang trống — bấm [+ Thêm món] để bắt đầu</div>`;
+    return;
+  }
   gridEl.innerHTML = `<div class="item-grid">` + filtered.map(it=>{
-    const status = computeItemStatus(it, orders, orderItems, nowMs);
-    const thumb = it.photo_url ? `<img src="${escapeHtml(it.photo_url)}" alt="">` : (CATEGORY_EMOJI[it.category]||'📦');
+    const status = computeItemStatusForDate(it, orders, orderItems, dateStr);
+    const thumb = it.photo_url ? `<img src="${escapeHtml(it.photo_url)}" alt="" loading="lazy">` : (CATEGORY_EMOJI[it.category]||'📦');
     const availLine = status.nextAvailableUnknown
       ? `<div class="item-avail">Chưa rõ ngày có lại (khách chưa trả đồ)</div>`
       : (status.nextAvailableMs ? `<div class="item-avail">Có lại: ${formatShortDateVN(new Date(status.nextAvailableMs).toISOString())}</div>` : '');
@@ -1763,6 +2266,7 @@ function paintItemGrid(items, orders, orderItems){
       <div class="info">
         <div class="name"><span class="status-dot ${status.color}"></span>${escapeHtml(it.name)}</div>
         <div class="meta">${it.code}${it.size?(' · '+escapeHtml(it.size)):''}</div>
+        <div class="status-label ${status.color}">${escapeHtml(status.label)}</div>
         ${availLine}
       </div>
     </button>`;
@@ -1789,7 +2293,7 @@ function itemFormFieldsHtml(item, idPrefix){
     <div class="field"><label>Cọc gợi ý</label><input type="text" inputmode="numeric" id="${idPrefix}-deposit" value="${item.deposit_value?Number(item.deposit_value).toLocaleString('vi-VN'):''}"></div>
     <div class="field"><label>Giá đền (nếu làm hỏng)</label><input type="text" inputmode="numeric" id="${idPrefix}-replace" value="${item.replace_value?Number(item.replace_value).toLocaleString('vi-VN'):''}"></div>
     <div class="field"><label>Giá vốn</label><input type="text" inputmode="numeric" id="${idPrefix}-cost" value="${item.cost_price?Number(item.cost_price).toLocaleString('vi-VN'):''}"></div>
-    <div class="field"><label>Buffer giặt (giờ)</label><input type="text" inputmode="numeric" id="${idPrefix}-buffer" value="${item.buffer_hours!=null?item.buffer_hours:DEFAULT_BUFFER_BY_CATEGORY[cat]}"></div>
+    <div class="field"><label>Nghỉ giặt sau khi trả (giờ)</label><input type="text" inputmode="numeric" id="${idPrefix}-buffer" value="${item.buffer_hours!=null?item.buffer_hours:DEFAULT_BUFFER_BY_CATEGORY[cat]}"></div>
     <div class="field"><label>Ghi chú</label><textarea id="${idPrefix}-note">${escapeHtml(item.note||'')}</textarea></div>
   `;
 }
@@ -1799,7 +2303,7 @@ function openAddItemModal(onCreated){
     <h3>Thêm món</h3>
     <form id="item-form">
       ${itemFormFieldsHtml(null, 'i')}
-      <div class="modal-actions"><button type="submit" class="btn">Lưu món</button></div>
+      <div class="modal-actions sticky-submit"><button type="submit" class="btn">Lưu món</button></div>
     </form>
   `);
   wireItemForm('i', null, onCreated);
@@ -1810,7 +2314,7 @@ function openEditItemModal(item){
     <h3>Sửa món ${item.code}</h3>
     <form id="item-form">
       ${itemFormFieldsHtml(item, 'i')}
-      <div class="modal-actions"><button type="submit" class="btn">Lưu thay đổi</button></div>
+      <div class="modal-actions sticky-submit"><button type="submit" class="btn">Lưu thay đổi</button></div>
     </form>
   `);
   wireItemForm('i', item, ()=>openItemDetail(item.id));
@@ -1855,10 +2359,10 @@ function wireItemForm(idPrefix, existingItem, onDone){
     let itemId = existingItem ? existingItem.id : null;
     if(existingItem){
       const {error} = await sb.from('items').update(payload).eq('id', existingItem.id);
-      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+      if(error){ toastError(error); btn.disabled = false; return; }
     } else {
       const {data, error} = await sb.from('items').insert(payload).select().single();
-      if(error){ toast('Lỗi tạo món: '+error.message); btn.disabled = false; return; }
+      if(error){ toast('Lỗi tạo món: '+viError(error), 4000); btn.disabled = false; return; }
       itemId = data.id;
     }
 
@@ -1867,9 +2371,9 @@ function wireItemForm(idPrefix, existingItem, onDone){
         const resized = await resizeImageFile(photoFile, 800);
         const url = await uploadItemPhoto(itemId, resized);
         const {error: photoErr} = await sb.from('items').update({photo_url:url}).eq('id', itemId);
-        if(photoErr){ toast('Lưu món OK nhưng lỗi ảnh: '+photoErr.message); }
+        if(photoErr){ toast('Lưu món OK nhưng lỗi ảnh: '+viError(photoErr), 4000); }
       }catch(photoEx){
-        toast('Lưu món OK nhưng lỗi xử lý ảnh: '+photoEx.message);
+        toast('Lưu món OK nhưng lỗi xử lý ảnh: '+viError(photoEx), 4000);
       }
     }
 
@@ -1904,8 +2408,10 @@ async function openItemDetail(itemId){
   });
   const orderItemsForBusy = rows.map(r=>({order_id: r.order_id, item_id: itemId}));
   const busy = itemBusyIntervals(item, ordersForBusy, orderItemsForBusy, nowMs);
-  const horizon14 = nowMs + 14*24*3600000;
-  const upcomingBusy = busy.filter(iv=>iv.startMs < horizon14 && iv.endMs > nowMs).sort((a,b)=>a.startMs-b.startMs);
+  // A2: bỏ trần 14 ngày — hiện TẤT CẢ khoảng bận tương lai (sort tăng dần), cap HIỂN THỊ ở 20 dòng đầu.
+  const allUpcomingBusy = busy.filter(iv=>iv.endMs > nowMs).sort((a,b)=>a.startMs-b.startMs);
+  const upcomingBusy = allUpcomingBusy.slice(0, 20);
+  const extraBusyCount = allUpcomingBusy.length - upcomingBusy.length;
 
   const photoHtml = item.photo_url ? `<img src="${escapeHtml(item.photo_url)}" alt="">` : (CATEGORY_EMOJI[item.category]||'📦');
   const canDelete = rows.length === 0;
@@ -1920,24 +2426,25 @@ async function openItemDetail(itemId){
     <div class="kv"><span class="k">Cọc gợi ý</span><span class="v">${money(item.deposit_value)}</span></div>
     <div class="kv"><span class="k">Giá đền</span><span class="v">${money(item.replace_value)}</span></div>
     <div class="kv"><span class="k">Giá vốn</span><span class="v">${money(item.cost_price)}</span></div>
-    <div class="kv"><span class="k">Buffer giặt</span><span class="v">${item.buffer_hours} giờ</span></div>
+    <div class="kv"><span class="k">Nghỉ giặt sau khi trả</span><span class="v">${item.buffer_hours} giờ</span></div>
     ${item.note ? `<div class="kv"><span class="k">Ghi chú</span><span class="v">${escapeHtml(item.note)}</span></div>` : ''}
 
-    <div class="section-title">Trạng thái tay</div>
+    <div class="section-title">Đánh dấu tình trạng</div>
     <div class="manual-status-chips" id="manual-status-chips">
       ${Object.keys(MANUAL_STATUS_LABEL).map(s=>`<button type="button" class="chip ${item.manual_status===s?'active':''}" data-status="${s}">${MANUAL_STATUS_LABEL[s]}</button>`).join('')}
     </div>
 
-    <div class="section-title">Lịch bận 14 ngày tới</div>
+    <div class="section-title">Lịch bận sắp tới</div>
     ${upcomingBusy.length ? upcomingBusy.map(iv=>`
       <div class="busy-row" data-order-id="${iv.orderId}">
         <span>${iv.orderCode}</span>
         <span>${formatDateTimeVN(new Date(iv.startMs).toISOString())} → ${iv.endMs===Infinity?'chưa rõ (chưa trả đồ)':formatDateTimeVN(new Date(iv.endMs).toISOString())}</span>
-      </div>`).join('') : `<div class="empty-state">Không có lịch bận trong 14 ngày tới</div>`}
+      </div>`).join('') : `<div class="empty-state">Không có lịch bận sắp tới</div>`}
+    ${extraBusyCount > 0 ? `<div class="empty-state">... còn ${extraBusyCount} khoảng nữa</div>` : ''}
 
     <div class="section-title">Thống kê</div>
     <div class="kv"><span class="k">Số lượt thuê</span><span class="v">${rentalCount}</span></div>
-    <div class="kv"><span class="k">Doanh thu tích lũy</span><span class="v">${money(revenue)}</span></div>
+    <div class="kv"><span class="k">Món này đã thu về</span><span class="v">${money(revenue)}</span></div>
     <div class="kv"><span class="k">Hoàn vốn</span><span class="v">${roiHtml}</span></div>
 
     <div class="modal-actions" style="flex-wrap:wrap;">
@@ -1949,7 +2456,7 @@ async function openItemDetail(itemId){
   document.querySelectorAll('#manual-status-chips .chip').forEach(chip=>{
     chip.addEventListener('click', async ()=>{
       const {error} = await sb.from('items').update({manual_status: chip.dataset.status}).eq('id', itemId);
-      if(error){ toast('Lỗi: '+error.message); return; }
+      if(error){ toastError(error); return; }
       toast('Đã cập nhật trạng thái');
       openItemDetail(itemId);
     });
@@ -1963,12 +2470,12 @@ async function openItemDetail(itemId){
     const btn = document.getElementById('btn-delete-item');
     btn.disabled = true;
     const {error} = await sb.from('items').delete().eq('id', itemId);
-    if(error){ toast('Lỗi xóa (có thể đã có lịch sử): '+error.message); btn.disabled = false; return; }
+    if(error){ toast('Lỗi xóa (có thể đã có lịch sử): '+viError(error), 4000); btn.disabled = false; return; }
     // audit-phase2 #10: xóa món xong thì dọn luôn ảnh trong bucket (tên file cố định {item_id}.jpg)
     // — không chặn việc báo "đã xóa" nếu lỡ lỗi xóa ảnh (món đã xóa khỏi DB rồi, không hoàn tác được).
     if(item.photo_url){
       const {error: rmErr} = await sb.storage.from('item-photos').remove([`${itemId}.jpg`]);
-      if(rmErr){ toast('Đã xóa món (ảnh trong kho lưu trữ có thể chưa xóa hết: '+rmErr.message+')'); closeModal(); if(currentTab==='kho') renderKho(); return; }
+      if(rmErr){ toast('Đã xóa món (ảnh trong kho lưu trữ có thể chưa xóa hết: '+viError(rmErr)+')'); closeModal(); if(currentTab==='kho') renderKho(); return; }
     }
     closeModal(); toast('Đã xóa món');
     if(currentTab==='kho') renderKho();
@@ -1981,6 +2488,7 @@ async function openItemDetail(itemId){
 let cashflowMonth = currentVnYearMonth();
 let cashflowType = 'all';
 let cashflowCategory = 'all';
+let cashflowDateScope = 'month'; // 'today' | 'month' — B1(b)
 
 async function renderCashflow(){
   const el = document.getElementById('tab-content');
@@ -1989,6 +2497,10 @@ async function renderCashflow(){
   let html = `<div class="fab-row">
     <button class="btn thu" id="btn-add-thu">+ Thu</button>
     <button class="btn chi" id="btn-add-chi">+ Chi</button>
+  </div>`;
+  html += `<div class="chips" id="cf-scope-chips">
+    <button type="button" class="chip ${cashflowDateScope==='today'?'active':''}" data-scope="today">Hôm nay</button>
+    <button type="button" class="chip ${cashflowDateScope==='month'?'active':''}" data-scope="month">Cả tháng</button>
   </div>`;
   html += `<div class="filter-row">
     ${monthPickerHtml('cf-month', cashflowMonth)}
@@ -2006,6 +2518,14 @@ async function renderCashflow(){
 
   document.getElementById('btn-add-thu').addEventListener('click', ()=>openTxModal('thu'));
   document.getElementById('btn-add-chi').addEventListener('click', ()=>openTxModal('chi'));
+  el.querySelectorAll('#cf-scope-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      cashflowDateScope = chip.dataset.scope;
+      el.querySelectorAll('#cf-scope-chips .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      loadCashflowList();
+    });
+  });
   document.getElementById('cf-month-month').addEventListener('change',()=>{cashflowMonth=monthPickerValue('cf-month'); loadCashflowList();});
   document.getElementById('cf-month-year').addEventListener('change',()=>{cashflowMonth=monthPickerValue('cf-month'); loadCashflowList();});
   document.getElementById('cf-type').value = cashflowType;
@@ -2029,11 +2549,16 @@ function refreshCategoryOptions(){
 async function loadCashflowList(){
   const listEl = document.getElementById('cf-list');
   listEl.innerHTML = '<div class="loading">Đang tải...</div>';
-  const {startISO, endISO} = vnMonthRange(cashflowMonth);
+  const {startISO, endISO} = cashflowDateScope==='today' ? vnDayRange(vnDateStr()) : vnMonthRange(cashflowMonth);
   let q = sb.from('transactions').select('*').gte('occurred_at',startISO).lt('occurred_at',endISO).order('occurred_at',{ascending:false});
   if(cashflowType!=='all') q = q.eq('type', cashflowType);
   if(cashflowCategory!=='all') q = q.eq('category', cashflowCategory);
-  const {data:tx} = await q;
+  const {data:tx, error} = await q;
+  if(error){
+    listEl.innerHTML = `<div class="error-block">Không tải được dữ liệu — kiểm tra mạng rồi bấm Tải lại.<br><button class="btn" id="btn-cf-retry">Tải lại</button></div>`;
+    document.getElementById('btn-cf-retry').addEventListener('click', loadCashflowList);
+    return;
+  }
   const list = tx || [];
   if(!list.length){ listEl.innerHTML = `<div class="empty-state">Không có giao dịch</div>`; return; }
 
@@ -2067,20 +2592,25 @@ function openTxModal(type){
   openModal(`
     <h3>${type==='thu'?'Thêm khoản thu':'Thêm khoản chi'}</h3>
     <form id="tx-form">
-      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-amount" required autofocus></div>
+      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-amount" required autofocus><div class="amount-words" id="tx-amount-words"></div></div>
       <div class="field">
         <label>Danh mục</label>
         <div class="chips" id="tx-chips">
-          ${cats.map((c,i)=>`<button type="button" class="chip ${i===0?'active':''}" data-cat="${c[0]}">${c[1]}</button>`).join('')}
+          ${cats.map(c=>`<button type="button" class="chip" data-cat="${c[0]}">${c[1]}</button>`).join('')}
         </div>
       </div>
       <div class="field"><label>Ngày giờ</label><input type="datetime-local" id="tx-occurred" value="${isoToVnLocalInput(new Date().toISOString())}"></div>
       <div class="field"><label>Ghi chú</label><textarea id="tx-note"></textarea></div>
-      <div class="modal-actions"><button type="submit" class="btn ${type}">Lưu</button></div>
+      <div class="modal-actions sticky-submit">
+        <button type="button" class="btn secondary" id="btn-tx-save-again">Lưu & ghi tiếp</button>
+        <button type="submit" class="btn ${type}">Lưu</button>
+      </div>
     </form>
   `);
   attachMoneyFormatting(document.getElementById('tx-amount'));
-  let selectedCat = cats[0][0];
+  attachAmountInWords(document.getElementById('tx-amount'), document.getElementById('tx-amount-words'));
+  // B4: KHÔNG chọn sẵn chip danh mục nào — chưa chọn thì không cho lưu (tránh ghi nhầm âm thầm).
+  let selectedCat = null;
   document.querySelectorAll('#tx-chips .chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       document.querySelectorAll('#tx-chips .chip').forEach(c=>c.classList.remove('active'));
@@ -2088,18 +2618,44 @@ function openTxModal(type){
       selectedCat = chip.dataset.cat;
     });
   });
-  document.getElementById('tx-form').addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
+
+  async function saveTx(){
+    if(!selectedCat){ toast('Chọn khoản gì đã'); return false; }
     const amount = parseMoneyInput(document.getElementById('tx-amount').value);
-    if(amount<=0){ toast('Nhập số tiền hợp lệ'); return; }
+    if(amount<=0){ toast('Nhập số tiền hợp lệ'); return false; }
     const note = document.getElementById('tx-note').value.trim();
     const occurredVal = document.getElementById('tx-occurred').value;
     const occurredISO = occurredVal ? vnLocalInputToISO(occurredVal) : new Date().toISOString();
-    btn.disabled = true;
     const {error} = await sb.from('transactions').insert({type, category:selectedCat, amount, note: note || null, occurred_at: occurredISO});
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); return false; }
+    return true;
+  }
+
+  document.getElementById('tx-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    const ok = await saveTx();
+    if(!ok){ btn.disabled = false; return; }
     closeModal(); toast('Đã lưu giao dịch');
+    if(currentTab==='cashflow') loadCashflowList();
+    else if(currentTab==='today') renderToday();
+  });
+
+  // B4: "Lưu & ghi tiếp" — lưu xong giữ modal mở, xóa ô tiền + ghi chú, giữ loại thu/chi,
+  // bỏ chọn chip (bắt chọn lại danh mục cho khoản tiếp theo), focus ô tiền.
+  document.getElementById('btn-tx-save-again').addEventListener('click', async ()=>{
+    const btn = document.getElementById('btn-tx-save-again');
+    btn.disabled = true;
+    const ok = await saveTx();
+    btn.disabled = false;
+    if(!ok) return;
+    document.getElementById('tx-amount').value = '';
+    document.getElementById('tx-note').value = '';
+    document.querySelectorAll('#tx-chips .chip').forEach(c=>c.classList.remove('active'));
+    selectedCat = null;
+    document.getElementById('tx-amount').focus();
+    toast('Đã ghi ✓');
     if(currentTab==='cashflow') loadCashflowList();
     else if(currentTab==='today') renderToday();
   });
@@ -2110,7 +2666,7 @@ function openTxEditModal(t){
   openModal(`
     <h3>Sửa giao dịch</h3>
     <form id="tx-edit-form">
-      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-e-amount" value="${Number(t.amount).toLocaleString('vi-VN')}"></div>
+      <div class="field"><label>Số tiền</label><input type="text" inputmode="numeric" id="tx-e-amount" value="${Number(t.amount).toLocaleString('vi-VN')}"><div class="amount-words" id="tx-e-amount-words"></div></div>
       <div class="field">
         <label>Danh mục</label>
         <div class="chips" id="tx-e-chips">
@@ -2126,6 +2682,7 @@ function openTxEditModal(t){
     </form>
   `);
   attachMoneyFormatting(document.getElementById('tx-e-amount'));
+  attachAmountInWords(document.getElementById('tx-e-amount'), document.getElementById('tx-e-amount-words'));
   let selectedCat = t.category;
   document.querySelectorAll('#tx-e-chips .chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
@@ -2140,7 +2697,7 @@ function openTxEditModal(t){
     const btn = document.getElementById('tx-delete-btn');
     btn.disabled = true;
     const {error} = await sb.from('transactions').delete().eq('id', t.id);
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
     closeModal(); toast('Đã xóa');
     if(currentTab==='cashflow') loadCashflowList();
   });
@@ -2154,7 +2711,7 @@ function openTxEditModal(t){
     const occurredISO = occurredVal ? vnLocalInputToISO(occurredVal) : t.occurred_at;
     btn.disabled = true;
     const {error} = await sb.from('transactions').update({amount, category:selectedCat, note: note||null, occurred_at: occurredISO}).eq('id', t.id);
-    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    if(error){ toastError(error); btn.disabled = false; return; }
     closeModal(); toast('Đã lưu');
     if(currentTab==='cashflow') loadCashflowList();
   });
@@ -2185,6 +2742,11 @@ async function loadReport(){
     sb.from('orders').select('id,deposit_amount,deposit_returned_amount,deposit_type,status'),
     sb.from('order_items').select('item_id, price, order:orders(pickup_at,status), item:items(name)')
   ]);
+  if(txRes.error || ordersRes.error || orderItemsRes.error){
+    body.innerHTML = `<div class="error-block">Không tải được dữ liệu — kiểm tra mạng rồi bấm Tải lại.<br><button class="btn" id="btn-report-retry">Tải lại</button></div>`;
+    document.getElementById('btn-report-retry').addEventListener('click', loadReport);
+    return;
+  }
   const tx = txRes.data || [];
   const orders = ordersRes.data || [];
 
@@ -2248,7 +2810,7 @@ async function loadReport(){
       </tbody>
     </table>
 
-    <div style="margin-top:16px;"><button class="btn secondary" id="btn-export-csv">Xuất CSV</button></div>
+    <div style="margin-top:16px;"><button class="btn secondary" id="btn-export-csv">Tải file Excel (CSV)</button></div>
   `;
   document.getElementById('btn-export-csv').addEventListener('click', ()=>exportCsv(tx, reportMonth));
 }
