@@ -235,7 +235,7 @@ function parseMoneyInput(str){
   return digits ? parseInt(digits,10) : 0;
 }
 function attachMoneyFormatting(input){
-  input.addEventListener('input', ()=>{
+  input.addEventListener('blur', ()=>{
     const raw = parseMoneyInput(input.value);
     input.value = raw ? raw.toLocaleString('vi-VN') : '';
   });
@@ -253,15 +253,42 @@ function vnDayRange(dateStr){
 }
 // Khoảng [start,end) UTC ISO cho 1 tháng VN (yyyy-mm)
 function vnMonthRange(yearMonthStr){
-  const [y,m] = yearMonthStr.split('-').map(Number);
-  const start = new Date(`${yearMonthStr}-01T00:00:00+07:00`);
-  const nextY = m===12 ? y+1 : y;
-  const nextM = m===12 ? 1 : m+1;
-  const end = new Date(`${nextY}-${String(nextM).padStart(2,'0')}-01T00:00:00+07:00`);
-  return {startISO:start.toISOString(), endISO:end.toISOString()};
+  try {
+    const [y,m] = String(yearMonthStr).split('-').map(Number);
+    if(!y || !m || m<1 || m>12) throw new Error('invalid yearMonthStr');
+    const start = new Date(`${yearMonthStr}-01T00:00:00+07:00`);
+    if(isNaN(start.getTime())) throw new Error('invalid date');
+    const nextY = m===12 ? y+1 : y;
+    const nextM = m===12 ? 1 : m+1;
+    const end = new Date(`${nextY}-${String(nextM).padStart(2,'0')}-01T00:00:00+07:00`);
+    if(isNaN(end.getTime())) throw new Error('invalid date');
+    return {startISO:start.toISOString(), endISO:end.toISOString()};
+  } catch(e){
+    // Ngăn RangeError treo UI (finding #8) — rơi về tháng hiện tại nếu input sai định dạng
+    const fallback = currentVnYearMonth();
+    if(fallback === yearMonthStr) throw e; // tránh đệ quy vô hạn nếu currentVnYearMonth cũng lỗi
+    return vnMonthRange(fallback);
+  }
 }
 function currentVnYearMonth(){
   return vnDateStr().slice(0,7);
+}
+// Chọn tháng bằng 2 <select> thay vì <input type="month"> (finding #8 — type="month" không
+// chạy trên iOS Safari và người dùng có thể gõ giá trị sai làm vnMonthRange ném lỗi).
+function monthPickerHtml(idPrefix, value){
+  const parts = String(value||currentVnYearMonth()).split('-').map(Number);
+  const vy = parts[0], vm = parts[1];
+  const nowY = Number(currentVnYearMonth().slice(0,4));
+  let yearOpts = '';
+  for(let y=nowY-3;y<=nowY+1;y++) yearOpts += `<option value="${y}" ${y===vy?'selected':''}>${y}</option>`;
+  let monthOpts = '';
+  for(let m=1;m<=12;m++) monthOpts += `<option value="${m}" ${m===vm?'selected':''}>Tháng ${m}</option>`;
+  return `<select id="${idPrefix}-month">${monthOpts}</select><select id="${idPrefix}-year">${yearOpts}</select>`;
+}
+function monthPickerValue(idPrefix){
+  const m = document.getElementById(idPrefix+'-month').value.padStart(2,'0');
+  const y = document.getElementById(idPrefix+'-year').value;
+  return `${y}-${m}`;
 }
 // datetime-local input value ("yyyy-MM-ddTHH:mm") -> ISO, hiểu là giờ VN
 function vnLocalInputToISO(value){
@@ -274,7 +301,7 @@ function isoToVnLocalInput(iso){
   const d = new Date(iso);
   const parts = new Intl.DateTimeFormat('en-CA',{
     timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit',
-    hour:'2-digit',minute:'2-digit',hour12:false
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'
   }).formatToParts(d);
   const p = Object.fromEntries(parts.map(x=>[x.type,x.value]));
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
@@ -292,6 +319,17 @@ function formatTimeVN(iso){
 function formatDateVN(iso){
   if(!iso) return '';
   return new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(iso));
+}
+// Format thủ công dd/MM/yyyy HH:mm cho xuất CSV (formatDateTimeVN dùng locale vi-VN có thể ra thứ tự Excel không parse được)
+function formatDateTimeForCsv(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat('en-CA',{
+    timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(d);
+  const p = Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -313,7 +351,7 @@ function orderRemaining(order, orderTx){
   return Number(order.rental_price) - paidThue;
 }
 function isCashDeposit(order){
-  return order.deposit_type === 'cash' || order.deposit_type === 'cash_cccd';
+  return (order.deposit_type === 'cash' || order.deposit_type === 'cash_cccd') && Number(order.deposit_amount) > 0;
 }
 function depositHeld(order){
   if(!isCashDeposit(order)) return 0;
@@ -414,7 +452,6 @@ async function renderToday(){
   const today = vnDateStr();
   const {startISO:dayStart, endISO:dayEnd} = vnDayRange(today);
   const {startISO:monthStart, endISO:monthEnd} = vnMonthRange(currentVnYearMonth());
-  const nowISO = new Date().toISOString();
 
   const [ordersRes, txMonthRes, custRes] = await Promise.all([
     sb.from('orders').select('*').order('pickup_at',{ascending:true}),
@@ -429,9 +466,19 @@ async function renderToday(){
   const chiThang = txMonth.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
   const cocGiu = orders.reduce((s,o)=>s+depositHeld(o),0);
 
-  const pickupToday = orders.filter(o=>o.status==='booked' && o.pickup_at>=dayStart && o.pickup_at<dayEnd);
-  const returnToday = orders.filter(o=>o.status==='picked_up' && o.return_due_at>=dayStart && o.return_due_at<dayEnd);
-  const overdue = orders.filter(o=>o.status==='picked_up' && o.return_due_at < nowISO);
+  // So sánh bằng getTime() thay vì so sánh chuỗi ISO thô (finding #7): PostgREST và
+  // toISOString() có thể trả về định dạng offset khác nhau (+00:00 vs .000Z) khiến so sánh
+  // chuỗi sai lệch quanh mốc nửa đêm giờ VN.
+  const dayStartMs = new Date(dayStart).getTime();
+  const dayEndMs = new Date(dayEnd).getTime();
+  const nowMs = Date.now();
+
+  // pickup_at < dayEnd (không chỉ trong hôm nay) để đơn booked trễ hẹn nhận không biến mất khỏi Tab Hôm nay (finding #14)
+  const pickupToday = orders.filter(o=>o.status==='booked' && new Date(o.pickup_at).getTime() < dayEndMs);
+  const overdue = orders.filter(o=>o.status==='picked_up' && new Date(o.return_due_at).getTime() < nowMs);
+  const overdueIds = new Set(overdue.map(o=>o.id));
+  // Loại các đơn đã nằm trong "Quá hạn" khỏi "Trả đồ hôm nay" để không hiện trùng 2 khối (finding #13)
+  const returnToday = orders.filter(o=>o.status==='picked_up' && !overdueIds.has(o.id) && new Date(o.return_due_at).getTime()>=dayStartMs && new Date(o.return_due_at).getTime()<dayEndMs);
 
   function custInfo(o){
     const c = customers[o.customer_id];
@@ -440,6 +487,10 @@ async function renderToday(){
   function overdueDuration(returnDueAt){
     const diffMs = Date.now() - new Date(returnDueAt).getTime();
     const hours = Math.floor(diffMs/3600000);
+    if(hours < 1){
+      const minutes = Math.max(0, Math.floor(diffMs/60000));
+      return `Trễ ${minutes} phút`;
+    }
     if(hours < 24) return `Trễ ${hours} giờ`;
     const days = Math.floor(hours/24);
     return `Trễ ${days} ngày`;
@@ -458,7 +509,7 @@ async function renderToday(){
         ${c.phone ? `<a class="tel-link" href="tel:${escapeHtml(c.phone)}">📞 ${escapeHtml(c.phone)}</a> · ` : ''}
         ${money(o.rental_price)}
       </div>
-      ${isOverdue ? `<div class="overdue-tag">${overdueDuration(o.return_due_at)}</div>` : ''}
+      ${isOverdue ? `<div class="overdue-tag">${opts.lateLabel||''}</div>` : ''}
       <div class="actions">
         ${opts.action}
       </div>
@@ -476,17 +527,22 @@ async function renderToday(){
     html += `<div class="section-title">⚠️ Quá hạn</div>`;
     html += overdue.map(o=>renderOrderCard(o,{
       overdue:true, timeLabel: formatDateTimeVN(o.return_due_at),
+      lateLabel: overdueDuration(o.return_due_at),
       action:`<button class="btn block-sm" data-action="pickedup-to-returned" data-id="${o.id}">Đã nhận lại đồ</button>
               <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
     })).join('');
   }
 
   html += `<div class="section-title">Nhận đồ hôm nay</div>`;
-  html += pickupToday.length ? pickupToday.map(o=>renderOrderCard(o,{
-    overdue:false, timeLabel: formatTimeVN(o.pickup_at),
-    action:`<button class="btn block-sm" data-action="booked-to-pickedup" data-id="${o.id}">Đã giao đồ</button>
-            <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
-  })).join('') : `<div class="empty-state">Không có đơn nhận đồ hôm nay</div>`;
+  html += pickupToday.length ? pickupToday.map(o=>{
+    const isLatePickup = new Date(o.pickup_at).getTime() < nowMs;
+    return renderOrderCard(o,{
+      overdue:isLatePickup, timeLabel: formatTimeVN(o.pickup_at),
+      lateLabel: isLatePickup ? `Chưa lấy đồ — ${overdueDuration(o.pickup_at)}` : '',
+      action:`<button class="btn block-sm" data-action="booked-to-pickedup" data-id="${o.id}">Đã giao đồ</button>
+              <button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button>`
+    });
+  }).join('') : `<div class="empty-state">Không có đơn nhận đồ hôm nay</div>`;
 
   html += `<div class="section-title">Trả đồ hôm nay</div>`;
   html += returnToday.length ? returnToday.map(o=>renderOrderCard(o,{
@@ -632,6 +688,7 @@ function openNewOrderModal(){
 
   document.getElementById('new-order-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
     const name = document.getElementById('f-name').value.trim();
     const phone = phoneInput.value.trim();
     const items = document.getElementById('f-items').value.trim();
@@ -647,12 +704,19 @@ function openNewOrderModal(){
     const returnISO = vnLocalInputToISO(ret);
     if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
 
-    let customerId = foundCustomerId;
+    btn.disabled = true;
+    // Tự truy vấn khách theo SĐT ngay tại thời điểm submit thay vì tin biến foundCustomerId
+    // do blur set trước đó (race condition, finding #10)
+    let customerId = null;
+    if(phone){
+      const {data: existingCust} = await sb.from('customers').select('id,name').eq('phone', phone).maybeSingle();
+      if(existingCust) customerId = existingCust.id;
+    }
     if(!customerId){
       const insertPayload = {name};
       if(phone) insertPayload.phone = phone;
       const {data:newCust, error:custErr} = await sb.from('customers').insert(insertPayload).select().single();
-      if(custErr){ toast('Lỗi tạo khách: '+custErr.message); return; }
+      if(custErr){ toast('Lỗi tạo khách: '+custErr.message); btn.disabled = false; return; }
       customerId = newCust.id;
     }
 
@@ -666,7 +730,7 @@ function openNewOrderModal(){
       deposit_type: depositType,
       note: note || null
     });
-    if(error){ toast('Lỗi tạo đơn: '+error.message); return; }
+    if(error){ toast('Lỗi tạo đơn: '+error.message); btn.disabled = false; return; }
     closeModal();
     toast('Đã tạo đơn mới');
     renderOrders();
@@ -693,8 +757,11 @@ async function openOrderDetail(orderId){
   }
   if(order.status === 'returned' && isCashDeposit(order)){
     actionsHtml += `<button class="btn block-sm" data-act="return-deposit">Hoàn cọc</button>`;
+  } else if(order.status === 'returned' && !isCashDeposit(order)){
+    // Đơn đã trả đồ nhưng không (còn) có cọc tiền mặt (vd: sửa đơn đổi cọc về none sau khi trả đồ) → không kẹt vĩnh viễn (finding #5)
+    actionsHtml += `<button class="btn block-sm" data-act="close-order">Đóng đơn</button>`;
   }
-  if(remaining > 0 && order.status !== 'cancelled'){
+  if(remaining > 0 && !['booked','cancelled'].includes(order.status)){
     actionsHtml += `<button class="btn secondary block-sm" data-act="collect-remaining">Thu nốt ${money(remaining)}</button>`;
   }
   if(!['closed','cancelled'].includes(order.status)){
@@ -732,17 +799,31 @@ async function openOrderDetail(orderId){
   box.querySelector('[data-act="pickedup-to-returned"]')?.addEventListener('click', ()=>flowPickedUpToReturned(order.id, ()=>{ if(currentTab==='orders') renderOrders(); else renderToday(); }));
   box.querySelector('[data-act="cancel-order"]')?.addEventListener('click', ()=>flowCancelOrder(order, ()=>renderOrders()));
   box.querySelector('[data-act="collect-remaining"]')?.addEventListener('click', ()=>flowCollectRemaining(order, remaining, ()=>{openOrderDetail(order.id);}));
-  box.querySelector('[data-act="return-deposit"]')?.addEventListener('click', ()=>flowReturnDeposit(order, ()=>renderOrders()));
+  box.querySelector('[data-act="return-deposit"]')?.addEventListener('click', ()=>flowReturnDeposit(order, remaining, ()=>renderOrders()));
+  box.querySelector('[data-act="close-order"]')?.addEventListener('click', async ()=>{
+    const btn = box.querySelector('[data-act="close-order"]');
+    btn.disabled = true;
+    const {error} = await sb.from('orders').update({status:'closed'}).eq('id', order.id);
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    closeModal(); toast('Đã đóng đơn');
+    if(currentTab==='orders') renderOrders(); else renderToday();
+  });
   box.querySelector('[data-act="edit-order"]')?.addEventListener('click', ()=>openEditOrderModal(order, customer));
 }
 
 /* ---------- Flow: booked -> picked_up (thu tiền thuê) ---------- */
 function flowBookedToPickedUp(orderId, onDone){
-  sb.from('orders').select('*').eq('id',orderId).single().then(({data:order})=>{
+  Promise.all([
+    sb.from('orders').select('*').eq('id',orderId).single(),
+    sb.from('transactions').select('*').eq('order_id',orderId)
+  ]).then(([{data:order}, {data:tx}])=>{
+    // Prefill = số còn thiếu (không phải rental_price) để tránh thu trùng khi đơn đã thu một phần/toàn bộ trước đó (finding #1)
+    const remaining = orderRemaining(order, tx || []);
+    const prefill = Math.max(remaining, 0);
     openModal(`
       <h3>Xác nhận giao đồ</h3>
       <p>Thu tiền thuê cho đơn <b>${order.code}</b>:</p>
-      <div class="field"><label>Số tiền thu</label><input type="text" inputmode="numeric" id="f-collect" value="${Number(order.rental_price).toLocaleString('vi-VN')}"></div>
+      <div class="field"><label>Số tiền thu</label><input type="text" inputmode="numeric" id="f-collect" value="${prefill.toLocaleString('vi-VN')}"></div>
       <div class="modal-actions">
         <button class="btn secondary" id="btn-skip-collect">Bỏ qua (chưa thu)</button>
         <button class="btn" id="btn-confirm-collect">Xác nhận thu & giao đồ</button>
@@ -750,20 +831,25 @@ function flowBookedToPickedUp(orderId, onDone){
     `);
     attachMoneyFormatting(document.getElementById('f-collect'));
     document.getElementById('btn-skip-collect').addEventListener('click', async ()=>{
+      const btn = document.getElementById('btn-skip-collect');
+      btn.disabled = true;
       const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); return; }
+      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
       closeModal(); toast('Đã giao đồ'); onDone();
     });
     document.getElementById('btn-confirm-collect').addEventListener('click', async ()=>{
+      const btn = document.getElementById('btn-confirm-collect');
       const amount = parseMoneyInput(document.getElementById('f-collect').value);
+      if(amount > 0 && amount > remaining){ toast('Số tiền thu vượt quá còn thiếu ('+money(remaining)+')'); return; }
+      btn.disabled = true;
       if(amount > 0){
         const {error:txErr} = await sb.from('transactions').insert({
           type:'thu', category:'tien_thue', amount, order_id: orderId
         });
-        if(txErr){ toast('Lỗi: '+txErr.message); return; }
+        if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
       }
       const {error} = await sb.from('orders').update({status:'picked_up'}).eq('id',orderId);
-      if(error){ toast('Lỗi: '+error.message); return; }
+      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
       closeModal(); toast('Đã giao đồ'); onDone();
     });
   });
@@ -779,10 +865,13 @@ function flowCollectRemaining(order, remaining, onDone){
   `);
   attachMoneyFormatting(document.getElementById('f-collect2'));
   document.getElementById('btn-confirm-collect2').addEventListener('click', async ()=>{
+    const btn = document.getElementById('btn-confirm-collect2');
     const amount = parseMoneyInput(document.getElementById('f-collect2').value);
     if(amount<=0){ toast('Số tiền phải > 0'); return; }
+    if(amount > remaining){ toast('Số tiền thu vượt quá còn thiếu ('+money(remaining)+')'); return; }
+    btn.disabled = true;
     const {error} = await sb.from('transactions').insert({type:'thu',category:'tien_thue',amount,order_id:order.id});
-    if(error){ toast('Lỗi: '+error.message); return; }
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã thu nốt'); onDone();
   });
 }
@@ -806,67 +895,80 @@ function flowPickedUpToReturned(orderId, onDone){
 }
 
 /* ---------- Flow: hoàn cọc (returned -> closed) ---------- */
-function flowReturnDeposit(order, onDone){
+function flowReturnDeposit(order, remaining, onDone){
+  // Cảnh báo nếu đơn còn thiếu tiền thuê trước khi hoàn cọc (finding #16)
+  const warnHtml = remaining > 0 ? `<p class="remain-warn">⚠️ Đơn còn thiếu ${money(remaining)}</p>` : '';
   openModal(`
     <h3>Hoàn cọc</h3>
     <p>Đơn <b>${order.code}</b> — cọc: ${money(order.deposit_amount)}</p>
+    ${warnHtml}
     <div class="field"><label>Số tiền hoàn</label><input type="text" inputmode="numeric" id="f-refund" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
     <div class="field"><label>Lý do (bắt buộc nếu hoàn thiếu)</label><textarea id="f-refund-reason"></textarea></div>
     <div class="modal-actions"><button class="btn" id="btn-confirm-refund">Xác nhận hoàn cọc & đóng đơn</button></div>
   `);
   attachMoneyFormatting(document.getElementById('f-refund'));
   document.getElementById('btn-confirm-refund').addEventListener('click', async ()=>{
+    const btn = document.getElementById('btn-confirm-refund');
     const refund = parseMoneyInput(document.getElementById('f-refund').value);
     const reason = document.getElementById('f-refund-reason').value.trim();
     const deposit = Number(order.deposit_amount);
     if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
     if(refund < deposit && !reason){ toast('Nhập lý do khi hoàn thiếu cọc'); return; }
+    btn.disabled = true;
     const diff = deposit - refund;
     if(diff > 0){
       const {error:txErr} = await sb.from('transactions').insert({
         type:'thu', category:'tien_den', amount: diff, order_id: order.id,
         note: reason
       });
-      if(txErr){ toast('Lỗi: '+txErr.message); return; }
+      if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({
       deposit_returned_amount: refund,
       deposit_returned_at: new Date().toISOString(),
       status: 'closed'
     }).eq('id', order.id);
-    if(error){ toast('Lỗi: '+error.message); return; }
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã hoàn cọc, đơn hoàn tất'); onDone();
   });
 }
 
 /* ---------- Flow: hủy đơn (chỉ khi booked) ---------- */
 function flowCancelOrder(order, onDone){
-  if(isCashDeposit(order) && Number(order.deposit_amount) > 0){
+  if(isCashDeposit(order)){
     openModal(`
       <h3>Hủy đơn ${order.code}</h3>
       <p>Đơn có cọc tiền mặt ${money(order.deposit_amount)}. Hoàn lại cho khách bao nhiêu?</p>
       <div class="field"><label>Số tiền hoàn lại khách</label><input type="text" inputmode="numeric" id="f-cancel-refund" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
+      <div class="field"><label>Lý do giữ cọc (bắt buộc nếu giữ lại một phần/toàn bộ)</label><textarea id="f-cancel-reason"></textarea></div>
       <p style="font-size:13px;color:var(--muted);">Phần tiệm giữ lại (khách bùng) sẽ tự tính = cọc − số hoàn, ghi nhận là "Phí hủy".</p>
       <div class="modal-actions"><button class="btn danger" id="btn-confirm-cancel">Xác nhận hủy đơn</button></div>
     `);
     attachMoneyFormatting(document.getElementById('f-cancel-refund'));
     document.getElementById('btn-confirm-cancel').addEventListener('click', async ()=>{
-      const refund = parseMoneyInput(document.getElementById('f-cancel-refund').value);
+      const btn = document.getElementById('btn-confirm-cancel');
+      // Ô trống coi là lỗi, không mặc định về 0 (finding #12)
+      const refundRaw = document.getElementById('f-cancel-refund').value.trim();
+      if(refundRaw === ''){ toast('Nhập số tiền hoàn (có thể nhập 0)'); return; }
+      const refund = parseMoneyInput(refundRaw);
+      const reason = document.getElementById('f-cancel-reason').value.trim();
       const deposit = Number(order.deposit_amount);
       if(refund > deposit){ toast('Không thể hoàn nhiều hơn tiền cọc'); return; }
       const kept = deposit - refund;
+      if(kept > 0 && !reason){ toast('Nhập lý do giữ cọc'); return; }
+      btn.disabled = true;
       if(kept > 0){
         const {error:txErr} = await sb.from('transactions').insert({
-          type:'thu', category:'phi_huy', amount: kept, order_id: order.id
+          type:'thu', category:'phi_huy', amount: kept, order_id: order.id, note: reason
         });
-        if(txErr){ toast('Lỗi: '+txErr.message); return; }
+        if(txErr){ toast('Lỗi: '+txErr.message); btn.disabled = false; return; }
       }
       const {error} = await sb.from('orders').update({
         status:'cancelled',
         deposit_returned_amount: refund,
         deposit_returned_at: new Date().toISOString()
       }).eq('id', order.id);
-      if(error){ toast('Lỗi: '+error.message); return; }
+      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
       closeModal(); toast('Đã hủy đơn'); onDone();
     });
   } else {
@@ -876,8 +978,10 @@ function flowCancelOrder(order, onDone){
       <div class="modal-actions"><button class="btn danger" id="btn-confirm-cancel2">Xác nhận hủy đơn</button></div>
     `);
     document.getElementById('btn-confirm-cancel2').addEventListener('click', async ()=>{
+      const btn = document.getElementById('btn-confirm-cancel2');
+      btn.disabled = true;
       const {error} = await sb.from('orders').update({status:'cancelled'}).eq('id', order.id);
-      if(error){ toast('Lỗi: '+error.message); return; }
+      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
       closeModal(); toast('Đã hủy đơn'); onDone();
     });
   }
@@ -912,17 +1016,21 @@ function openEditOrderModal(order, customer){
   attachMoneyFormatting(document.getElementById('e-deposit'));
   document.getElementById('edit-order-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
     const pickupISO = vnLocalInputToISO(document.getElementById('e-pickup').value);
     const returnISO = vnLocalInputToISO(document.getElementById('e-return').value);
     if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
     const price = parseMoneyInput(document.getElementById('e-price').value);
     const deposit = parseMoneyInput(document.getElementById('e-deposit').value);
+    btn.disabled = true;
 
     if(customer){
-      await sb.from('customers').update({
+      // Bắt lỗi update customer thay vì âm thầm bỏ qua rồi vẫn báo "Đã lưu" (finding #11)
+      const {error: custErr} = await sb.from('customers').update({
         name: document.getElementById('e-name').value.trim(),
         phone: document.getElementById('e-phone').value.trim() || null
       }).eq('id', customer.id);
+      if(custErr){ toast('Lỗi cập nhật khách: '+custErr.message); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({
       items_text: document.getElementById('e-items').value.trim(),
@@ -933,7 +1041,7 @@ function openEditOrderModal(order, customer){
       deposit_type: document.getElementById('e-deposit-type').value,
       note: document.getElementById('e-note').value.trim() || null
     }).eq('id', order.id);
-    if(error){ toast('Lỗi: '+error.message); return; }
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã lưu');
     if(currentTab==='orders') renderOrders(); else renderToday();
   });
@@ -955,7 +1063,7 @@ async function renderCashflow(){
     <button class="btn chi" id="btn-add-chi">+ Chi</button>
   </div>`;
   html += `<div class="filter-row">
-    <input type="month" id="cf-month" value="${cashflowMonth}">
+    ${monthPickerHtml('cf-month', cashflowMonth)}
     <select id="cf-type">
       <option value="all">Tất cả loại</option>
       <option value="thu">Thu</option>
@@ -970,7 +1078,8 @@ async function renderCashflow(){
 
   document.getElementById('btn-add-thu').addEventListener('click', ()=>openTxModal('thu'));
   document.getElementById('btn-add-chi').addEventListener('click', ()=>openTxModal('chi'));
-  document.getElementById('cf-month').addEventListener('change',(e)=>{cashflowMonth=e.target.value; loadCashflowList();});
+  document.getElementById('cf-month-month').addEventListener('change',()=>{cashflowMonth=monthPickerValue('cf-month'); loadCashflowList();});
+  document.getElementById('cf-month-year').addEventListener('change',()=>{cashflowMonth=monthPickerValue('cf-month'); loadCashflowList();});
   document.getElementById('cf-type').value = cashflowType;
   document.getElementById('cf-type').addEventListener('change',(e)=>{cashflowType=e.target.value; refreshCategoryOptions(); loadCashflowList();});
 
@@ -1037,6 +1146,7 @@ function openTxModal(type){
           ${cats.map((c,i)=>`<button type="button" class="chip ${i===0?'active':''}" data-cat="${c[0]}">${c[1]}</button>`).join('')}
         </div>
       </div>
+      <div class="field"><label>Ngày giờ</label><input type="datetime-local" id="tx-occurred" value="${isoToVnLocalInput(new Date().toISOString())}"></div>
       <div class="field"><label>Ghi chú</label><textarea id="tx-note"></textarea></div>
       <div class="modal-actions"><button type="submit" class="btn ${type}">Lưu</button></div>
     </form>
@@ -1052,11 +1162,15 @@ function openTxModal(type){
   });
   document.getElementById('tx-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
     const amount = parseMoneyInput(document.getElementById('tx-amount').value);
     if(amount<=0){ toast('Nhập số tiền hợp lệ'); return; }
     const note = document.getElementById('tx-note').value.trim();
-    const {error} = await sb.from('transactions').insert({type, category:selectedCat, amount, note: note || null});
-    if(error){ toast('Lỗi: '+error.message); return; }
+    const occurredVal = document.getElementById('tx-occurred').value;
+    const occurredISO = occurredVal ? vnLocalInputToISO(occurredVal) : new Date().toISOString();
+    btn.disabled = true;
+    const {error} = await sb.from('transactions').insert({type, category:selectedCat, amount, note: note || null, occurred_at: occurredISO});
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã lưu giao dịch');
     if(currentTab==='cashflow') loadCashflowList();
     else if(currentTab==='today') renderToday();
@@ -1075,6 +1189,7 @@ function openTxEditModal(t){
           ${cats.map(c=>`<button type="button" class="chip ${c[0]===t.category?'active':''}" data-cat="${c[0]}">${c[1]}</button>`).join('')}
         </div>
       </div>
+      <div class="field"><label>Ngày giờ</label><input type="datetime-local" id="tx-e-occurred" value="${isoToVnLocalInput(t.occurred_at)}"></div>
       <div class="field"><label>Ghi chú</label><textarea id="tx-e-note">${escapeHtml(t.note||'')}</textarea></div>
       <div class="modal-actions">
         <button type="button" class="btn danger" id="tx-delete-btn">Xóa</button>
@@ -1092,18 +1207,26 @@ function openTxEditModal(t){
     });
   });
   document.getElementById('tx-delete-btn').addEventListener('click', async ()=>{
+    // Xác nhận trước khi xóa (finding #3)
+    if(!confirm('Xóa giao dịch này?')) return;
+    const btn = document.getElementById('tx-delete-btn');
+    btn.disabled = true;
     const {error} = await sb.from('transactions').delete().eq('id', t.id);
-    if(error){ toast('Lỗi: '+error.message); return; }
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã xóa');
     if(currentTab==='cashflow') loadCashflowList();
   });
   document.getElementById('tx-edit-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
     const amount = parseMoneyInput(document.getElementById('tx-e-amount').value);
     if(amount<=0){ toast('Nhập số tiền hợp lệ'); return; }
     const note = document.getElementById('tx-e-note').value.trim();
-    const {error} = await sb.from('transactions').update({amount, category:selectedCat, note: note||null}).eq('id', t.id);
-    if(error){ toast('Lỗi: '+error.message); return; }
+    const occurredVal = document.getElementById('tx-e-occurred').value;
+    const occurredISO = occurredVal ? vnLocalInputToISO(occurredVal) : t.occurred_at;
+    btn.disabled = true;
+    const {error} = await sb.from('transactions').update({amount, category:selectedCat, note: note||null, occurred_at: occurredISO}).eq('id', t.id);
+    if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
     closeModal(); toast('Đã lưu');
     if(currentTab==='cashflow') loadCashflowList();
   });
@@ -1117,10 +1240,11 @@ let reportMonth = currentVnYearMonth();
 async function renderReport(){
   const el = document.getElementById('tab-content');
   el.innerHTML = '<div class="loading">Đang tải...</div>';
-  let html = `<div class="filter-row"><input type="month" id="rp-month" value="${reportMonth}"></div>`;
+  let html = `<div class="filter-row">${monthPickerHtml('rp-month', reportMonth)}</div>`;
   html += `<div id="rp-body"></div>`;
   el.innerHTML = html;
-  document.getElementById('rp-month').addEventListener('change',(e)=>{reportMonth=e.target.value; loadReport();});
+  document.getElementById('rp-month-month').addEventListener('change',()=>{reportMonth=monthPickerValue('rp-month'); loadReport();});
+  document.getElementById('rp-month-year').addEventListener('change',()=>{reportMonth=monthPickerValue('rp-month'); loadReport();});
   await loadReport();
 }
 
@@ -1154,7 +1278,7 @@ async function loadReport(){
       <div class="summary-item"><div class="lbl">Tổng chi</div><div class="val">${money(totalChi)}</div></div>
       <div class="summary-item"><div class="lbl">Lãi/lỗ</div><div class="val">${money(laiLo)}</div></div>
     </div>
-    <div class="card" style="font-size:14px;">Cọc đang giữ: <b>${money(cocGiu)}</b> (không tính vào thu)</div>
+    <div class="card" style="font-size:14px;">Cọc đang giữ (hiện tại): <b>${money(cocGiu)}</b> (không tính vào thu)</div>
 
     <div class="section-title">Thu theo danh mục</div>
     <table class="report-table">
@@ -1178,7 +1302,7 @@ async function loadReport(){
 function exportCsv(tx, monthStr){
   const header = ['Ngày giờ','Loại','Danh mục','Số tiền','Ghi chú'];
   const rows = tx.slice().sort((a,b)=> a.occurred_at < b.occurred_at ? -1 : 1).map(t=>[
-    formatDateTimeVN(t.occurred_at),
+    formatDateTimeForCsv(t.occurred_at),
     t.type==='thu'?'Thu':'Chi',
     CAT_LABEL[t.category]||t.category,
     Math.round(Number(t.amount)),
