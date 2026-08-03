@@ -160,6 +160,34 @@
   table.report-table th,table.report-table td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;}
   table.report-table td.amt{text-align:right;}
   .loading{text-align:center;color:var(--muted);padding:20px;font-size:14px;}
+
+  /* ---------- Phase 2: Tab Kho ---------- */
+  .item-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .item-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05);text-align:left;border:none;padding:0;cursor:pointer;}
+  .item-card .thumb{width:100%;aspect-ratio:1/1;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;}
+  .item-card .thumb img{width:100%;height:100%;object-fit:cover;}
+  .item-card .info{padding:8px 10px;}
+  .item-card .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
+  .item-card .meta{color:var(--muted);font-size:12px;margin-top:2px;}
+  .status-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block;}
+  .status-dot.green{background:var(--ok);}
+  .status-dot.yellow{background:#c9960c;}
+  .status-dot.red{background:var(--danger);}
+  .status-dot.gray{background:#9a9a9a;}
+  .item-avail{font-size:11px;color:var(--muted);margin-top:2px;}
+  .item-photo-lg{width:100%;aspect-ratio:1/1;border-radius:12px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:72px;overflow:hidden;margin-bottom:10px;}
+  .item-photo-lg img{width:100%;height:100%;object-fit:cover;}
+  .manual-status-chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
+  .busy-row{display:flex;justify-content:space-between;background:var(--card);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:13px;border:1px solid var(--border);}
+  .item-search-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  .picked-item-row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:6px;}
+  .picked-item-row.conflict{border-color:var(--danger);background:var(--danger-bg);}
+  .picked-item-row input{width:110px;padding:6px;border:1px solid var(--border);border-radius:8px;}
+  .picked-item-conflict-msg{color:var(--danger);font-size:12px;margin-top:2px;}
+  .item-search-results{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
+  .item-search-results:empty{display:none;border:none;margin-bottom:0;}
+  .item-search-result-row{padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer;}
+  .item-search-result-row:last-child{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -192,6 +220,7 @@
   <nav id="bottom-nav">
     <button data-tab="today"><span class="ic">🏠</span>Hôm nay</button>
     <button data-tab="orders"><span class="ic">📋</span>Đơn thuê</button>
+    <button data-tab="kho"><span class="ic">👗</span>Kho</button>
     <button data-tab="cashflow"><span class="ic">💵</span>Thu chi</button>
     <button data-tab="report"><span class="ic">📊</span>Báo cáo</button>
   </nav>
@@ -219,6 +248,12 @@ const CATS_CHI = [
 const CAT_LABEL = Object.fromEntries([...CATS_THU,...CATS_CHI]);
 const STATUS_LABEL = {booked:'Đã đặt',picked_up:'Khách đang giữ đồ',returned:'Đã trả đồ',closed:'Hoàn tất',cancelled:'Đã hủy'};
 const DEPOSIT_LABEL = {cash:'Tiền mặt',cccd:'CCCD',cash_cccd:'Tiền mặt + CCCD',none:'Không cọc'};
+
+// ---- Phase 2: Kho đồ ----
+const CATEGORY_LABEL = {vay:'Váy', ao_dai:'Áo dài', phu_kien:'Phụ kiện', props:'Đạo cụ/Props', khac:'Khác'};
+const CATEGORY_EMOJI = {vay:'👗', ao_dai:'👘', phu_kien:'💍', props:'🎭', khac:'📦'};
+const MANUAL_STATUS_LABEL = {ok:'Bình thường', giat:'Đang giặt', sua:'Đang sửa', hong:'Hỏng', nghi:'Nghỉ'};
+const DEFAULT_BUFFER_BY_CATEGORY = {vay:24, ao_dai:24, phu_kien:0, props:0, khac:24};
 
 let currentTab = 'today';
 let currentUser = null;
@@ -320,6 +355,11 @@ function formatDateVN(iso){
   if(!iso) return '';
   return new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(iso));
 }
+// Ngày/tháng ngắn gọn kiểu "6/8" — dùng cho dòng "Có lại: ..." trên lưới Kho (Phase 2)
+function formatShortDateVN(iso){
+  if(!iso) return '';
+  return new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'numeric',month:'numeric'}).format(new Date(iso));
+}
 // Format thủ công dd/MM/yyyy HH:mm cho xuất CSV (formatDateTimeVN dùng locale vi-VN có thể ra thứ tự Excel không parse được)
 function formatDateTimeForCsv(iso){
   if(!iso) return '';
@@ -357,6 +397,166 @@ function depositHeld(order){
   if(!isCashDeposit(order)) return 0;
   if(!['booked','picked_up','returned'].includes(order.status)) return 0;
   return Number(order.deposit_amount) - Number(order.deposit_returned_amount || 0);
+}
+
+/* ============================================================
+   PHASE 2 — LỊCH TỪNG MÓN / CHỐNG TRÙNG LỊCH
+   3 hàm THUẦN (không side-effect, không đụng DOM/DB) — test độc lập bằng node
+   (xem /home/claude/test-schedule.js). KHÔNG được đụng vào các hàm tiền/cọc ở trên.
+   ============================================================ */
+
+/**
+ * itemBusyIntervals(item, orders, orderItems, nowMs) -> [{startMs, endMs, orderId, orderCode}]
+ * Nguồn: các đơn status 'booked' hoặc 'picked_up' có chứa item đó (qua bảng order_items).
+ * Mỗi đơn sinh 1 interval [pickup_at, effectiveEnd + buffer_hours]:
+ *   - effectiveEnd = return_due_at            (đơn booked)
+ *   - effectiveEnd = max(return_due_at, now)   (đơn picked_up chưa trả — quá hạn thì bận tới now)
+ * Đơn returned/closed/cancelled KHÔNG sinh interval (không chặn lịch), kể cả nếu buffer của
+ * lần thuê đó còn "trong hạn giặt" — trạng thái chờ giặt thể hiện qua manual_status, không qua lịch.
+ *
+ * Test case (xem file test-schedule.js, chạy `node test-schedule.js` phải in PASS 7/7):
+ * 1. Hai đơn cùng ngày khác giờ, buffer 0 (props): 8-11h và 13-17h → KHÔNG trùng; 8-11h và 10-14h → TRÙNG.
+ * 2. Buffer 24h: đơn A trả 17h ngày 5 → đơn B nhận 10h ngày 6 → TRÙNG (còn trong buffer); nhận 18h ngày 6 → KHÔNG trùng.
+ * 3. Đơn qua đêm nhiều ngày.
+ * 4. Đơn picked_up quá hạn (return_due_at hôm qua, chưa trả) → hôm nay vẫn bận.
+ * 5. Sửa đơn: đổi giờ của chính đơn đang sửa không tự báo trùng với chính nó (excludeOrderId).
+ * 6. Chạm mép: A kết thúc (kể cả buffer) đúng 14:00, B bắt đầu 14:00 → không trùng.
+ * 7. Đơn cancelled/returned không chặn.
+ */
+function itemBusyIntervals(item, orders, orderItems, nowMs){
+  const orderIdsForItem = new Set(
+    orderItems.filter(oi=>oi.item_id===item.id).map(oi=>oi.order_id)
+  );
+  const result = [];
+  for(const o of orders){
+    if(!orderIdsForItem.has(o.id)) continue;
+    if(o.status !== 'booked' && o.status !== 'picked_up') continue;
+    const pickupMs = new Date(o.pickup_at).getTime();
+    const dueMs = new Date(o.return_due_at).getTime();
+    const effectiveEnd = o.status === 'picked_up' ? Math.max(dueMs, nowMs) : dueMs;
+    const endMs = effectiveEnd + Number(item.buffer_hours||0)*3600000;
+    result.push({startMs: pickupMs, endMs, orderId: o.id, orderCode: o.code});
+  }
+  return result;
+}
+
+/**
+ * checkConflict(itemId, startMs, endMs, bufferHours, busyIntervals, excludeOrderId, manualStatus) -> conflict|null
+ * Interval đơn mới = [startMs, endMs + bufferHours].
+ * Overlap chuẩn: aStart < bEnd && bStart < aEnd (chạm mép đúng bằng nhau = KHÔNG trùng).
+ * excludeOrderId: khi SỬA đơn phải loại chính đơn đó ra khỏi busyIntervals trước khi so.
+ * manualStatus != 'ok' → món không khả dụng bất kể lịch, trả về lý do riêng (kiểm tra trước, ưu tiên hơn lịch).
+ */
+function checkConflict(itemId, startMs, endMs, bufferHours, busyIntervals, excludeOrderId, manualStatus){
+  if(manualStatus && manualStatus !== 'ok'){
+    return {reason:'manual_status', manualStatus, itemId};
+  }
+  const newStart = startMs;
+  const newEnd = endMs + Number(bufferHours||0)*3600000;
+  for(const iv of busyIntervals){
+    if(excludeOrderId && iv.orderId === excludeOrderId) continue;
+    if(newStart < iv.endMs && iv.startMs < newEnd){
+      return {reason:'schedule', itemId, orderId: iv.orderId, orderCode: iv.orderCode, busyStartMs: iv.startMs, busyEndMs: iv.endMs};
+    }
+  }
+  return null;
+}
+
+/**
+ * nextAvailableMs(item, busyIntervals, nowMs) -> ms|null
+ * "Dự kiến có lại": merge các interval bận giao/chạm nhau (chuỗi đơn nối tiếp), tìm chuỗi merge
+ * đang chứa thời điểm nowMs, trả về mốc kết thúc (ms) của chuỗi đó. Không bận ngay lúc nowMs → null
+ * (sẵn sàng ngay), kể cả khi có đơn bận trong tương lai xa hơn.
+ */
+function nextAvailableMs(item, busyIntervals, nowMs){
+  if(!busyIntervals.length) return null;
+  const sorted = busyIntervals.slice().sort((a,b)=>a.startMs-b.startMs);
+  const merged = [];
+  for(const iv of sorted){
+    const last = merged[merged.length-1];
+    if(last && iv.startMs <= last.endMs){
+      if(iv.endMs > last.endMs) last.endMs = iv.endMs;
+    } else {
+      merged.push({startMs: iv.startMs, endMs: iv.endMs});
+    }
+  }
+  for(const m of merged){
+    if(m.startMs <= nowMs && nowMs < m.endMs){
+      return m.endMs;
+    }
+  }
+  return null;
+}
+
+/* ============================================================
+   PHASE 2 — helper UI (dùng 3 hàm thuần ở trên, không phải hàm thuần)
+   ============================================================ */
+// Trạng thái hiển thị của 1 món trên lưới Kho: xanh sẵn sàng / vàng đã đặt trong 3 ngày tới /
+// đỏ đang thuê / xám giặt-sửa-hỏng-nghỉ (manual_status ưu tiên cao nhất).
+function computeItemStatus(item, orders, orderItems, nowMs){
+  if(item.manual_status !== 'ok'){
+    return {color:'gray', label: MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status, nextAvailableMs:null};
+  }
+  const busy = itemBusyIntervals(item, orders, orderItems, nowMs);
+  const currentlyBusy = busy.find(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
+  if(currentlyBusy){
+    return {color:'red', label:'Đang thuê', nextAvailableMs: nextAvailableMs(item, busy, nowMs)};
+  }
+  const in3Days = nowMs + 3*24*3600000;
+  const orderIdsForItem = new Set(orderItems.filter(oi=>oi.item_id===item.id).map(oi=>oi.order_id));
+  const upcoming = orders.some(o=>{
+    if(!orderIdsForItem.has(o.id)) return false;
+    if(o.status!=='booked') return false;
+    const pickupMs = new Date(o.pickup_at).getTime();
+    return pickupMs >= nowMs && pickupMs <= in3Days;
+  });
+  if(upcoming) return {color:'yellow', label:'Đã đặt', nextAvailableMs:null};
+  return {color:'green', label:'Sẵn sàng', nextAvailableMs:null};
+}
+
+// Giá gợi ý 1 món theo khoảng thời gian thuê (todo-phase2.md mục 0):
+// tổng thời gian ≤ 8 tiếng và món có rent_price_hour>0 → số giờ × rent_price_hour;
+// ngược lại → ceil(số giờ/24) × rent_price_day.
+function computeItemSuggestedPrice(item, hours){
+  if(hours <= 8 && Number(item.rent_price_hour) > 0){
+    return Math.round(hours * Number(item.rent_price_hour));
+  }
+  return Math.ceil(hours/24) * Number(item.rent_price_day);
+}
+
+// Resize ảnh client-side còn tối đa maxDim px (giữ tỉ lệ) trước khi upload, trả về Blob JPEG.
+function resizeImageFile(file, maxDim){
+  maxDim = maxDim || 800;
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      let {width, height} = img;
+      if(width > maxDim || height > maxDim){
+        if(width >= height){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob=>{
+        if(!blob) reject(new Error('Không resize được ảnh'));
+        else resolve(blob);
+      }, 'image/jpeg', 0.82);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('Không đọc được file ảnh')); };
+    img.src = url;
+  });
+}
+
+// Upload ảnh (đã resize) lên storage bucket item-photos, tên file {item_id}.jpg, trả về public URL.
+async function uploadItemPhoto(itemId, blob){
+  const path = `${itemId}.jpg`;
+  const {error} = await sb.storage.from('item-photos').upload(path, blob, {upsert:true, contentType:'image/jpeg'});
+  if(error) throw error;
+  const {data} = sb.storage.from('item-photos').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 /* ============================================================
@@ -411,14 +611,14 @@ initSession();
 document.querySelectorAll('#bottom-nav button').forEach(btn=>{
   btn.addEventListener('click', ()=>switchTab(btn.dataset.tab));
 });
-const TAB_TITLES = {today:'Hôm nay', orders:'Đơn thuê', cashflow:'Thu chi', report:'Báo cáo'};
+const TAB_TITLES = {today:'Hôm nay', orders:'Đơn thuê', kho:'Kho', cashflow:'Thu chi', report:'Báo cáo'};
 function switchTab(tab){
   currentTab = tab;
   document.getElementById('topbar-title').textContent = TAB_TITLES[tab];
   document.querySelectorAll('#bottom-nav button').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab===tab);
   });
-  const map = {today:renderToday, orders:renderOrders, cashflow:renderCashflow, report:renderReport};
+  const map = {today:renderToday, orders:renderOrders, kho:renderKho, cashflow:renderCashflow, report:renderReport};
   map[tab]();
 }
 
@@ -453,14 +653,20 @@ async function renderToday(){
   const {startISO:dayStart, endISO:dayEnd} = vnDayRange(today);
   const {startISO:monthStart, endISO:monthEnd} = vnMonthRange(currentVnYearMonth());
 
-  const [ordersRes, txMonthRes, custRes] = await Promise.all([
+  const [ordersRes, txMonthRes, custRes, orderItemsRes] = await Promise.all([
     sb.from('orders').select('*').order('pickup_at',{ascending:true}),
     sb.from('transactions').select('*').gte('occurred_at', monthStart).lt('occurred_at', monthEnd),
-    sb.from('customers').select('id,name,phone')
+    sb.from('customers').select('id,name,phone'),
+    sb.from('order_items').select('order_id, item:items(name)')
   ]);
   const orders = ordersRes.data || [];
   const txMonth = txMonthRes.data || [];
   const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
+  const itemNamesByOrder = {};
+  (orderItemsRes.data||[]).forEach(oi=>{
+    if(!oi.item) return;
+    (itemNamesByOrder[oi.order_id] = itemNamesByOrder[oi.order_id]||[]).push(oi.item.name);
+  });
 
   const thuThang = txMonth.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
   const chiThang = txMonth.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
@@ -499,12 +705,14 @@ async function renderToday(){
   function renderOrderCard(o, opts){
     const c = custInfo(o);
     const isOverdue = opts.overdue;
+    const khoNames = itemNamesByOrder[o.id];
+    const itemsLabel = [khoNames && khoNames.length ? khoNames.join(', ') : '', o.items_text || ''].filter(Boolean).join(' · ');
     return `<div class="card order-card ${isOverdue?'overdue-card':''}" data-order-id="${o.id}">
       <div class="row1">
         <span class="name">${escapeHtml(c.name)}</span>
         <span class="time">${opts.timeLabel}</span>
       </div>
-      <div class="items">${escapeHtml(o.items_text)}</div>
+      <div class="items">${escapeHtml(itemsLabel)}</div>
       <div class="meta">
         ${c.phone ? `<a class="tel-link" href="tel:${escapeHtml(c.phone)}">📞 ${escapeHtml(c.phone)}</a> · ` : ''}
         ${money(o.rental_price)}
@@ -568,12 +776,18 @@ async function renderOrders(){
   const el = document.getElementById('tab-content');
   el.innerHTML = '<div class="loading">Đang tải...</div>';
 
-  const [ordersRes, custRes] = await Promise.all([
+  const [ordersRes, custRes, orderItemsRes] = await Promise.all([
     sb.from('orders').select('*').order('created_at',{ascending:false}),
-    sb.from('customers').select('id,name,phone')
+    sb.from('customers').select('id,name,phone'),
+    sb.from('order_items').select('order_id, item:items(name)')
   ]);
   const orders = ordersRes.data || [];
   const customers = Object.fromEntries((custRes.data||[]).map(c=>[c.id,c]));
+  const itemNamesByOrder = {};
+  (orderItemsRes.data||[]).forEach(oi=>{
+    if(!oi.item) return;
+    (itemNamesByOrder[oi.order_id] = itemNamesByOrder[oi.order_id]||[]).push(oi.item.name);
+  });
 
   let html = `<div class="fab-row">
     <button class="btn" id="btn-new-order">+ Đơn mới</button>
@@ -597,18 +811,18 @@ async function renderOrders(){
   document.getElementById('filter-status').value = ordersFilterStatus;
   document.getElementById('filter-status').addEventListener('change',(e)=>{
     ordersFilterStatus = e.target.value;
-    paintOrdersList(orders, customers);
+    paintOrdersList(orders, customers, itemNamesByOrder);
   });
   document.getElementById('search-order').addEventListener('input',(e)=>{
     ordersSearchTerm = e.target.value;
-    paintOrdersList(orders, customers);
+    paintOrdersList(orders, customers, itemNamesByOrder);
   });
   document.getElementById('btn-new-order').addEventListener('click', ()=>openNewOrderModal());
 
-  paintOrdersList(orders, customers);
+  paintOrdersList(orders, customers, itemNamesByOrder);
 }
 
-function paintOrdersList(orders, customers){
+function paintOrdersList(orders, customers, itemNamesByOrder){
   const listEl = document.getElementById('orders-list');
   const term = ordersSearchTerm.trim().toLowerCase();
   const filtered = orders.filter(o=>{
@@ -625,18 +839,247 @@ function paintOrdersList(orders, customers){
   }
   listEl.innerHTML = filtered.map(o=>{
     const c = customers[o.customer_id] || {name:'(?)',phone:''};
+    const khoNames = (itemNamesByOrder||{})[o.id];
+    const itemsLabel = [khoNames && khoNames.length ? khoNames.join(', ') : '', o.items_text || ''].filter(Boolean).join(' · ');
     return `<div class="card order-card" data-order-id="${o.id}">
       <div class="row1">
         <span class="name">${escapeHtml(c.name)} <span class="badge ${o.status}">${STATUS_LABEL[o.status]}</span></span>
         <span class="time">${o.code}</span>
       </div>
-      <div class="items">${escapeHtml(o.items_text)}</div>
+      <div class="items">${escapeHtml(itemsLabel)}</div>
       <div class="meta">Nhận: ${formatDateTimeVN(o.pickup_at)} · Trả: ${formatDateTimeVN(o.return_due_at)}</div>
       <div class="meta">${money(o.rental_price)} · Cọc: ${money(o.deposit_amount)} (${DEPOSIT_LABEL[o.deposit_type]})</div>
       <div class="actions"><button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button></div>
     </div>`;
   }).join('');
   listEl.querySelectorAll('[data-action="open-order"]').forEach(b=>b.addEventListener('click',()=>openOrderDetail(b.dataset.id)));
+}
+
+/* ---------- Phase 2: khối "Món thuê từ kho" dùng chung cho form tạo/sửa đơn ---------- */
+function getOrderDatesMsFromForm(pickupId, returnId){
+  const pickupVal = document.getElementById(pickupId).value;
+  const returnVal = document.getElementById(returnId).value;
+  if(!pickupVal || !returnVal) return null;
+  const pickupISO = vnLocalInputToISO(pickupVal);
+  const returnISO = vnLocalInputToISO(returnVal);
+  if(!pickupISO || !returnISO) return null;
+  const startMs = new Date(pickupISO).getTime();
+  const endMs = new Date(returnISO).getTime();
+  if(!(endMs > startMs)) return null;
+  return {startMs, endMs};
+}
+
+function itemPickerBlockHtml(idPrefix){
+  return `
+    <div class="section-title">Món thuê từ kho</div>
+    <div class="item-search-row">
+      <input type="text" id="${idPrefix}-item-search" placeholder="Tìm món trong kho theo tên/mã" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+    <div class="item-search-results" id="${idPrefix}-item-results"></div>
+    <div id="${idPrefix}-item-selected"></div>
+    <button type="button" class="btn secondary block-sm" id="${idPrefix}-item-quickadd" style="margin-bottom:10px;">+ Thêm món nhanh</button>
+    <div class="hidden" id="${idPrefix}-quickadd-box" style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;">
+      <div class="field"><label>Tên món *</label><input type="text" id="${idPrefix}-qa-name"></div>
+      <div class="field">
+        <label>Loại *</label>
+        <select id="${idPrefix}-qa-category">
+          ${Object.keys(CATEGORY_LABEL).map(c=>`<option value="${c}">${CATEGORY_LABEL[c]}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Giá thuê / ngày</label><input type="text" inputmode="numeric" id="${idPrefix}-qa-price"></div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn block-sm" id="${idPrefix}-qa-save">Tạo & chọn món</button>
+        <button type="button" class="btn ghost block-sm" id="${idPrefix}-qa-cancel">Hủy</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Gắn logic cho khối item-picker vừa render (search chọn nhiều món, check trùng lịch ngay khi
+ * chọn, giá gợi ý tự điền khi ô tiền chưa bị sửa tay, thêm món nhanh).
+ * opts: {idPrefix, pickupId, returnId, priceFieldId, depositFieldId, excludeOrderId, initialEntries, saveBtnSelector}
+ * Trả về {state, recomputeAll} để form cha gọi recomputeAll() khi đổi ngày giờ.
+ */
+function wireItemPickerBlock(opts){
+  const state = {
+    entries: (opts.initialEntries || []).slice(),
+    scheduleCtx: null,
+    priceDirty: false,
+    depositDirty: false
+  };
+  const searchInput = document.getElementById(`${opts.idPrefix}-item-search`);
+  const resultsEl = document.getElementById(`${opts.idPrefix}-item-results`);
+  const selectedEl = document.getElementById(`${opts.idPrefix}-item-selected`);
+  const priceField = document.getElementById(opts.priceFieldId);
+  const depositField = document.getElementById(opts.depositFieldId);
+  const quickAddBtn = document.getElementById(`${opts.idPrefix}-item-quickadd`);
+  const quickAddBox = document.getElementById(`${opts.idPrefix}-quickadd-box`);
+
+  priceField.addEventListener('input', ()=>{ state.priceDirty = true; });
+  depositField.addEventListener('input', ()=>{ state.depositDirty = true; });
+
+  function getDatesMs(){
+    return getOrderDatesMsFromForm(opts.pickupId, opts.returnId);
+  }
+
+  async function ensureScheduleCtx(){
+    if(state.scheduleCtx) return state.scheduleCtx;
+    const [ordersRes, orderItemsRes] = await Promise.all([
+      sb.from('orders').select('id,code,status,pickup_at,return_due_at'),
+      sb.from('order_items').select('order_id,item_id')
+    ]);
+    state.scheduleCtx = {orders: ordersRes.data||[], orderItems: orderItemsRes.data||[]};
+    return state.scheduleCtx;
+  }
+
+  function conflictForItem(item){
+    const dates = getDatesMs();
+    if(!dates || !state.scheduleCtx) return null;
+    const busy = itemBusyIntervals(item, state.scheduleCtx.orders, state.scheduleCtx.orderItems, Date.now());
+    return checkConflict(item.id, dates.startMs, dates.endMs, item.buffer_hours, busy, opts.excludeOrderId, item.manual_status);
+  }
+
+  function paintSelected(){
+    if(!state.entries.length){
+      selectedEl.innerHTML = `<div class="empty-state">Chưa chọn món nào từ kho</div>`;
+      return;
+    }
+    selectedEl.innerHTML = state.entries.map((entry, idx)=>{
+      const c = entry.conflict;
+      let warnHtml = '';
+      if(c && c.reason==='schedule'){
+        warnHtml = `<div class="picked-item-conflict-msg">⚠️ Trùng lịch với ${escapeHtml(c.orderCode||'')}</div>`;
+      } else if(c && c.reason==='manual_status'){
+        warnHtml = `<div class="picked-item-conflict-msg">⚠️ Đang ${MANUAL_STATUS_LABEL[c.manualStatus]||c.manualStatus}</div>`;
+      }
+      return `<div class="picked-item-row ${c?'conflict':''}" data-idx="${idx}">
+        <div style="flex:1;">
+          <div>${escapeHtml(entry.item.name)} <span style="color:var(--muted);font-size:12px;">(${entry.item.code})</span></div>
+          ${warnHtml}
+        </div>
+        <input type="text" inputmode="numeric" class="picked-item-price" data-idx="${idx}" value="${Number(entry.price||0).toLocaleString('vi-VN')}">
+        <button type="button" class="btn ghost picked-item-remove" data-idx="${idx}">✕</button>
+      </div>`;
+    }).join('');
+    selectedEl.querySelectorAll('.picked-item-price').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        const idx = Number(inp.dataset.idx);
+        const raw = parseMoneyInput(inp.value);
+        inp.value = raw ? raw.toLocaleString('vi-VN') : '';
+        state.entries[idx].priceTouched = true;
+        state.entries[idx].price = raw;
+        if(!state.priceDirty){
+          const total = state.entries.reduce((s,e)=>s+Number(e.price||0),0);
+          priceField.value = total ? total.toLocaleString('vi-VN') : '';
+        }
+      });
+    });
+    selectedEl.querySelectorAll('.picked-item-remove').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = Number(btn.dataset.idx);
+        state.entries.splice(idx,1);
+        recomputeAll();
+      });
+    });
+  }
+
+  function recomputeAll(){
+    const dates = getDatesMs();
+    const hours = dates ? (dates.endMs-dates.startMs)/3600000 : 0;
+    let anyConflict = false;
+    state.entries.forEach(entry=>{
+      entry.conflict = conflictForItem(entry.item);
+      if(entry.conflict) anyConflict = true;
+      if(!entry.priceTouched && dates){
+        entry.price = computeItemSuggestedPrice(entry.item, hours);
+      }
+    });
+    paintSelected();
+    if(!state.priceDirty){
+      const total = state.entries.reduce((s,e)=>s+Number(e.price||0),0);
+      priceField.value = total ? total.toLocaleString('vi-VN') : '';
+    }
+    if(!state.depositDirty){
+      const totalDep = state.entries.reduce((s,e)=>s+Number(e.item.deposit_value||0),0);
+      depositField.value = totalDep ? totalDep.toLocaleString('vi-VN') : '';
+    }
+    if(opts.saveBtnSelector){
+      const saveBtn = document.querySelector(opts.saveBtnSelector);
+      if(saveBtn) saveBtn.disabled = anyConflict;
+    }
+  }
+
+  async function tryAddItem(item){
+    await ensureScheduleCtx();
+    if(state.entries.some(e=>e.item.id===item.id)){ toast('Món này đã được chọn'); return; }
+    const conflict = conflictForItem(item);
+    if(conflict){
+      if(conflict.reason==='schedule'){
+        toast(`⚠️ Trùng lịch với ${conflict.orderCode}, không thể thêm`);
+      } else {
+        toast(`⚠️ Món đang ${MANUAL_STATUS_LABEL[conflict.manualStatus]||conflict.manualStatus}, không thể thêm`);
+      }
+      return;
+    }
+    const dates = getDatesMs();
+    const hours = dates ? (dates.endMs-dates.startMs)/3600000 : 0;
+    const price = dates ? computeItemSuggestedPrice(item, hours) : Number(item.rent_price_day||0);
+    state.entries.push({item, price, priceTouched:false, conflict:null});
+    searchInput.value = '';
+    resultsEl.innerHTML = '';
+    recomputeAll();
+  }
+
+  let searchDebounce = null;
+  searchInput.addEventListener('input', ()=>{
+    clearTimeout(searchDebounce);
+    const term = searchInput.value.trim();
+    if(!term){ resultsEl.innerHTML=''; return; }
+    searchDebounce = setTimeout(async ()=>{
+      const {data} = await sb.from('items').select('*').or(`name.ilike.%${term}%,code.ilike.%${term}%`).limit(15);
+      const list = (data||[]).filter(it=>!state.entries.some(e=>e.item.id===it.id));
+      if(!list.length){ resultsEl.innerHTML = `<div class="item-search-result-row">Không tìm thấy</div>`; return; }
+      resultsEl.innerHTML = list.map(it=>`<div class="item-search-result-row" data-item-id="${it.id}">${escapeHtml(it.name)} <span style="color:var(--muted);">(${it.code})</span> — ${money(it.rent_price_day)}/ngày</div>`).join('');
+      resultsEl.querySelectorAll('[data-item-id]').forEach(row=>{
+        row.addEventListener('click', ()=>{
+          const it = list.find(x=>x.id===row.dataset.itemId);
+          if(it) tryAddItem(it);
+        });
+      });
+    }, 250);
+  });
+
+  quickAddBtn.addEventListener('click', ()=>{
+    quickAddBox.classList.toggle('hidden');
+  });
+  document.getElementById(`${opts.idPrefix}-qa-cancel`).addEventListener('click', ()=>{
+    quickAddBox.classList.add('hidden');
+  });
+  attachMoneyFormatting(document.getElementById(`${opts.idPrefix}-qa-price`));
+  document.getElementById(`${opts.idPrefix}-qa-save`).addEventListener('click', async ()=>{
+    const btn = document.getElementById(`${opts.idPrefix}-qa-save`);
+    const name = document.getElementById(`${opts.idPrefix}-qa-name`).value.trim();
+    if(!name){ toast('Nhập tên món'); return; }
+    const category = document.getElementById(`${opts.idPrefix}-qa-category`).value;
+    const priceDay = parseMoneyInput(document.getElementById(`${opts.idPrefix}-qa-price`).value);
+    btn.disabled = true;
+    const {data, error} = await sb.from('items').insert({
+      name, category, rent_price_day: priceDay,
+      buffer_hours: DEFAULT_BUFFER_BY_CATEGORY[category]
+    }).select().single();
+    btn.disabled = false;
+    if(error){ toast('Lỗi tạo món: '+error.message); return; }
+    document.getElementById(`${opts.idPrefix}-qa-name`).value = '';
+    document.getElementById(`${opts.idPrefix}-qa-price`).value = '';
+    quickAddBox.classList.add('hidden');
+    await tryAddItem(data);
+  });
+
+  // Load sẵn schedule context rồi tính conflict cho các món đã có (trường hợp sửa đơn)
+  ensureScheduleCtx().then(()=>recomputeAll());
+
+  return {state, recomputeAll};
 }
 
 function openNewOrderModal(){
@@ -646,9 +1089,10 @@ function openNewOrderModal(){
       <div class="field"><label>Tên khách *</label><input type="text" id="f-name" required></div>
       <div class="field"><label>Số điện thoại</label><input type="tel" id="f-phone"></div>
       <div class="field" id="known-cust-note" style="display:none;color:var(--ok);font-size:13px;"></div>
-      <div class="field"><label>Món thuê *</label><textarea id="f-items" required></textarea></div>
       <div class="field"><label>Nhận lúc *</label><input type="datetime-local" id="f-pickup" required></div>
       <div class="field"><label>Trả lúc *</label><input type="datetime-local" id="f-return" required></div>
+      ${itemPickerBlockHtml('f')}
+      <div class="field"><label>Ghi chú món/đồ ngoài kho</label><textarea id="f-items"></textarea></div>
       <div class="field"><label>Tiền thuê *</label><input type="text" inputmode="numeric" id="f-price" required></div>
       <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="f-deposit" value="0"></div>
       <div class="field">
@@ -668,6 +1112,15 @@ function openNewOrderModal(){
   `);
   attachMoneyFormatting(document.getElementById('f-price'));
   attachMoneyFormatting(document.getElementById('f-deposit'));
+
+  const itemPicker = wireItemPickerBlock({
+    idPrefix:'f', pickupId:'f-pickup', returnId:'f-return',
+    priceFieldId:'f-price', depositFieldId:'f-deposit',
+    excludeOrderId:null, initialEntries:[],
+    saveBtnSelector:'#new-order-form button[type=submit]'
+  });
+  document.getElementById('f-pickup').addEventListener('change', ()=>itemPicker.recomputeAll());
+  document.getElementById('f-return').addEventListener('change', ()=>itemPicker.recomputeAll());
 
   const phoneInput = document.getElementById('f-phone');
   let foundCustomerId = null;
@@ -704,6 +1157,11 @@ function openNewOrderModal(){
     const returnISO = vnLocalInputToISO(ret);
     if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
 
+    // Chặn lưu nếu có món đang chọn bị trùng lịch/không khả dụng (phòng vệ thêm ngoài việc disable nút, finding-style)
+    itemPicker.recomputeAll();
+    if(itemPicker.state.entries.some(e=>e.conflict)){ toast('Có món đang trùng lịch/không khả dụng, không thể lưu'); return; }
+    if(!items && !itemPicker.state.entries.length){ toast('Chọn ít nhất 1 món từ kho hoặc ghi chú món ngoài kho'); return; }
+
     btn.disabled = true;
     // Tự truy vấn khách theo SĐT ngay tại thời điểm submit thay vì tin biến foundCustomerId
     // do blur set trước đó (race condition, finding #10)
@@ -720,17 +1178,22 @@ function openNewOrderModal(){
       customerId = newCust.id;
     }
 
-    const {error} = await sb.from('orders').insert({
+    const {data:newOrder, error} = await sb.from('orders').insert({
       customer_id: customerId,
-      items_text: items,
+      items_text: items || null,
       pickup_at: pickupISO,
       return_due_at: returnISO,
       rental_price: price,
       deposit_amount: deposit,
       deposit_type: depositType,
       note: note || null
-    });
+    }).select().single();
     if(error){ toast('Lỗi tạo đơn: '+error.message); btn.disabled = false; return; }
+    if(itemPicker.state.entries.length){
+      const rows = itemPicker.state.entries.map(e=>({order_id:newOrder.id, item_id:e.item.id, price:Number(e.price||0)}));
+      const {error: oiErr} = await sb.from('order_items').insert(rows);
+      if(oiErr){ toast('Đã tạo đơn nhưng lỗi lưu món: '+oiErr.message); }
+    }
     closeModal();
     toast('Đã tạo đơn mới');
     renderOrders();
@@ -743,7 +1206,9 @@ async function openOrderDetail(orderId){
   if(!order){ toast('Không tìm thấy đơn'); return; }
   const {data: customer} = await sb.from('customers').select('*').eq('id', order.customer_id).maybeSingle();
   const {data: tx} = await sb.from('transactions').select('*').eq('order_id', orderId).order('occurred_at',{ascending:false});
+  const {data: orderItemsRows} = await sb.from('order_items').select('*, item:items(*)').eq('order_id', orderId);
   const orderTx = tx || [];
+  const orderItemsList = (orderItemsRows||[]).filter(oi=>oi.item);
   const remaining = orderRemaining(order, orderTx);
   const held = depositHeld(order);
 
@@ -772,7 +1237,8 @@ async function openOrderDetail(orderId){
     <h3>${order.code}</h3>
     <div class="kv"><span class="k">Khách</span><span class="v">${escapeHtml(customer?.name||'(?)')}</span></div>
     <div class="kv"><span class="k">SĐT</span><span class="v">${customer?.phone ? `<a class="tel-link" href="tel:${escapeHtml(customer.phone)}">${escapeHtml(customer.phone)}</a>` : '—'}</span></div>
-    <div class="kv"><span class="k">Món thuê</span><span class="v">${escapeHtml(order.items_text)}</span></div>
+    ${orderItemsList.length ? `<div class="kv"><span class="k">Món (kho)</span><span class="v">${orderItemsList.map(oi=>`<span class="item-link" data-item-id="${oi.item.id}" style="cursor:pointer;text-decoration:underline;">${escapeHtml(oi.item.name)}</span> (${money(oi.price)})`).join(', ')}</span></div>` : ''}
+    ${order.items_text ? `<div class="kv"><span class="k">Món thuê (ghi chú)</span><span class="v">${escapeHtml(order.items_text)}</span></div>` : ''}
     <div class="kv"><span class="k">Nhận lúc</span><span class="v">${formatDateTimeVN(order.pickup_at)}</span></div>
     <div class="kv"><span class="k">Trả lúc (hạn)</span><span class="v">${formatDateTimeVN(order.return_due_at)}</span></div>
     ${order.returned_at ? `<div class="kv"><span class="k">Đã trả lúc</span><span class="v">${formatDateTimeVN(order.returned_at)}</span></div>` : ''}
@@ -795,6 +1261,9 @@ async function openOrderDetail(orderId){
   `);
 
   const box = document.querySelector('.modal-box');
+  box.querySelectorAll('.item-link').forEach(el=>{
+    el.addEventListener('click', ()=>openItemDetail(el.dataset.itemId));
+  });
   box.querySelector('[data-act="booked-to-pickedup"]')?.addEventListener('click', ()=>flowBookedToPickedUp(order.id, ()=>{ if(currentTab==='orders') renderOrders(); else renderToday(); }));
   box.querySelector('[data-act="pickedup-to-returned"]')?.addEventListener('click', ()=>flowPickedUpToReturned(order.id, ()=>{ if(currentTab==='orders') renderOrders(); else renderToday(); }));
   box.querySelector('[data-act="cancel-order"]')?.addEventListener('click', ()=>flowCancelOrder(order, ()=>renderOrders()));
@@ -988,15 +1457,17 @@ function flowCancelOrder(order, onDone){
 }
 
 /* ---------- Sửa đơn ---------- */
-function openEditOrderModal(order, customer){
+async function openEditOrderModal(order, customer){
+  const {data: existingOrderItems} = await sb.from('order_items').select('*, item:items(*)').eq('order_id', order.id);
   openModal(`
     <h3>Sửa đơn ${order.code}</h3>
     <form id="edit-order-form">
       <div class="field"><label>Tên khách</label><input type="text" id="e-name" value="${escapeHtml(customer?.name||'')}"></div>
       <div class="field"><label>Số điện thoại</label><input type="tel" id="e-phone" value="${escapeHtml(customer?.phone||'')}"></div>
-      <div class="field"><label>Món thuê</label><textarea id="e-items">${escapeHtml(order.items_text)}</textarea></div>
       <div class="field"><label>Nhận lúc</label><input type="datetime-local" id="e-pickup" value="${isoToVnLocalInput(order.pickup_at)}"></div>
       <div class="field"><label>Trả lúc</label><input type="datetime-local" id="e-return" value="${isoToVnLocalInput(order.return_due_at)}"></div>
+      ${itemPickerBlockHtml('e')}
+      <div class="field"><label>Ghi chú món/đồ ngoài kho</label><textarea id="e-items">${escapeHtml(order.items_text||'')}</textarea></div>
       <div class="field"><label>Tiền thuê</label><input type="text" inputmode="numeric" id="e-price" value="${Number(order.rental_price).toLocaleString('vi-VN')}"></div>
       <div class="field"><label>Tiền cọc</label><input type="text" inputmode="numeric" id="e-deposit" value="${Number(order.deposit_amount).toLocaleString('vi-VN')}"></div>
       <div class="field">
@@ -1014,6 +1485,21 @@ function openEditOrderModal(order, customer){
   `);
   attachMoneyFormatting(document.getElementById('e-price'));
   attachMoneyFormatting(document.getElementById('e-deposit'));
+
+  const itemPicker = wireItemPickerBlock({
+    idPrefix:'e', pickupId:'e-pickup', returnId:'e-return',
+    priceFieldId:'e-price', depositFieldId:'e-deposit',
+    excludeOrderId: order.id,
+    initialEntries: (existingOrderItems||[]).filter(oi=>oi.item).map(oi=>({item: oi.item, price: Number(oi.price), priceTouched:true, conflict:null})),
+    saveBtnSelector:'#edit-order-form button[type=submit]'
+  });
+  // Đơn đang sửa đã có tiền thuê/cọc thật từ trước — không để việc tính lại gợi ý (chạy nền khi mở modal)
+  // âm thầm ghi đè giá trị đã lưu; chỉ gợi ý khi người dùng chủ động đổi ngày/món sau đó.
+  itemPicker.state.priceDirty = true;
+  itemPicker.state.depositDirty = true;
+  document.getElementById('e-pickup').addEventListener('change', ()=>itemPicker.recomputeAll());
+  document.getElementById('e-return').addEventListener('change', ()=>itemPicker.recomputeAll());
+
   document.getElementById('edit-order-form').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const btn = e.target.querySelector('button[type=submit]');
@@ -1022,6 +1508,12 @@ function openEditOrderModal(order, customer){
     if(new Date(returnISO) <= new Date(pickupISO)){ toast('Giờ trả phải sau giờ nhận'); return; }
     const price = parseMoneyInput(document.getElementById('e-price').value);
     const deposit = parseMoneyInput(document.getElementById('e-deposit').value);
+    const items = document.getElementById('e-items').value.trim();
+
+    // Chặn lưu nếu có món đang chọn bị trùng lịch/không khả dụng (excludeOrderId đã tự loại chính đơn này)
+    itemPicker.recomputeAll();
+    if(itemPicker.state.entries.some(e=>e.conflict)){ toast('Có món đang trùng lịch/không khả dụng, không thể lưu'); return; }
+
     btn.disabled = true;
 
     if(customer){
@@ -1033,7 +1525,7 @@ function openEditOrderModal(order, customer){
       if(custErr){ toast('Lỗi cập nhật khách: '+custErr.message); btn.disabled = false; return; }
     }
     const {error} = await sb.from('orders').update({
-      items_text: document.getElementById('e-items').value.trim(),
+      items_text: items || null,
       pickup_at: pickupISO,
       return_due_at: returnISO,
       rental_price: price,
@@ -1042,8 +1534,305 @@ function openEditOrderModal(order, customer){
       note: document.getElementById('e-note').value.trim() || null
     }).eq('id', order.id);
     if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+
+    // Đồng bộ order_items: xóa hết rồi thêm lại đúng danh sách hiện có trên form (đơn giản, tránh lệch diff)
+    const {error: delErr} = await sb.from('order_items').delete().eq('order_id', order.id);
+    if(delErr){ toast('Đã lưu đơn nhưng lỗi đồng bộ món: '+delErr.message); }
+    else if(itemPicker.state.entries.length){
+      const rows = itemPicker.state.entries.map(en=>({order_id:order.id, item_id:en.item.id, price:Number(en.price||0)}));
+      const {error: oiErr} = await sb.from('order_items').insert(rows);
+      if(oiErr){ toast('Đã lưu đơn nhưng lỗi đồng bộ món: '+oiErr.message); }
+    }
+
     closeModal(); toast('Đã lưu');
     if(currentTab==='orders') renderOrders(); else renderToday();
+  });
+}
+
+/* ============================================================
+   TAB PHASE 2: KHO
+   ============================================================ */
+let khoSearchTerm = '';
+let khoFilterCategory = 'all';
+let khoFilterStatus = 'all';
+
+async function renderKho(){
+  const el = document.getElementById('tab-content');
+  el.innerHTML = '<div class="loading">Đang tải...</div>';
+
+  const [itemsRes, ordersRes, orderItemsRes] = await Promise.all([
+    sb.from('items').select('*').order('created_at',{ascending:false}),
+    sb.from('orders').select('id,code,status,pickup_at,return_due_at'),
+    sb.from('order_items').select('order_id,item_id')
+  ]);
+  const items = itemsRes.data || [];
+  const orders = ordersRes.data || [];
+  const orderItems = orderItemsRes.data || [];
+
+  let html = `<div class="fab-row"><button class="btn" id="btn-add-item">+ Thêm món</button></div>`;
+  html += `<div class="filter-row"><input type="text" id="kho-search" placeholder="Tìm tên / mã / size" value="${escapeHtml(khoSearchTerm)}"></div>`;
+  html += `<div class="chips" id="kho-cat-chips">
+    <button type="button" class="chip ${khoFilterCategory==='all'?'active':''}" data-cat="all">Tất cả loại</button>
+    ${Object.keys(CATEGORY_LABEL).map(c=>`<button type="button" class="chip ${khoFilterCategory===c?'active':''}" data-cat="${c}">${CATEGORY_LABEL[c]}</button>`).join('')}
+  </div>`;
+  html += `<div class="chips" id="kho-status-chips">
+    <button type="button" class="chip ${khoFilterStatus==='all'?'active':''}" data-status="all">Tất cả trạng thái</button>
+    <button type="button" class="chip ${khoFilterStatus==='green'?'active':''}" data-status="green">🟢 Sẵn sàng</button>
+    <button type="button" class="chip ${khoFilterStatus==='yellow'?'active':''}" data-status="yellow">🟡 Đã đặt</button>
+    <button type="button" class="chip ${khoFilterStatus==='red'?'active':''}" data-status="red">🔴 Đang thuê</button>
+    <button type="button" class="chip ${khoFilterStatus==='gray'?'active':''}" data-status="gray">⚪ Giặt/sửa/hỏng/nghỉ</button>
+  </div>`;
+  html += `<div id="kho-grid"></div>`;
+  el.innerHTML = html;
+
+  document.getElementById('btn-add-item').addEventListener('click', ()=>openAddItemModal());
+  document.getElementById('kho-search').addEventListener('input', (e)=>{
+    khoSearchTerm = e.target.value;
+    paintItemGrid(items, orders, orderItems);
+  });
+  el.querySelectorAll('#kho-cat-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      khoFilterCategory = chip.dataset.cat;
+      el.querySelectorAll('#kho-cat-chips .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      paintItemGrid(items, orders, orderItems);
+    });
+  });
+  el.querySelectorAll('#kho-status-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      khoFilterStatus = chip.dataset.status;
+      el.querySelectorAll('#kho-status-chips .chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      paintItemGrid(items, orders, orderItems);
+    });
+  });
+
+  paintItemGrid(items, orders, orderItems);
+}
+
+function paintItemGrid(items, orders, orderItems){
+  const gridEl = document.getElementById('kho-grid');
+  const nowMs = Date.now();
+  const term = khoSearchTerm.trim().toLowerCase();
+  const filtered = items.filter(it=>{
+    if(khoFilterCategory!=='all' && it.category!==khoFilterCategory) return false;
+    const status = computeItemStatus(it, orders, orderItems, nowMs);
+    if(khoFilterStatus!=='all' && status.color!==khoFilterStatus) return false;
+    if(term){
+      const hay = `${it.name} ${it.code} ${it.size||''}`.toLowerCase();
+      if(!hay.includes(term)) return false;
+    }
+    return true;
+  });
+  if(!filtered.length){ gridEl.innerHTML = `<div class="empty-state">Không có món nào</div>`; return; }
+  gridEl.innerHTML = `<div class="item-grid">` + filtered.map(it=>{
+    const status = computeItemStatus(it, orders, orderItems, nowMs);
+    const thumb = it.photo_url ? `<img src="${escapeHtml(it.photo_url)}" alt="">` : (CATEGORY_EMOJI[it.category]||'📦');
+    const availLine = status.nextAvailableMs ? `<div class="item-avail">Có lại: ${formatShortDateVN(new Date(status.nextAvailableMs).toISOString())}</div>` : '';
+    return `<button type="button" class="item-card" data-item-id="${it.id}">
+      <div class="thumb">${thumb}</div>
+      <div class="info">
+        <div class="name"><span class="status-dot ${status.color}"></span>${escapeHtml(it.name)}</div>
+        <div class="meta">${it.code}${it.size?(' · '+escapeHtml(it.size)):''}</div>
+        ${availLine}
+      </div>
+    </button>`;
+  }).join('') + `</div>`;
+  gridEl.querySelectorAll('[data-item-id]').forEach(b=>b.addEventListener('click',()=>openItemDetail(b.dataset.itemId)));
+}
+
+/* ---------- Thêm / sửa món ---------- */
+function itemFormFieldsHtml(item, idPrefix){
+  item = item || {};
+  const cat = item.category || 'khac';
+  return `
+    <div class="field"><label>Tên món *</label><input type="text" id="${idPrefix}-name" value="${escapeHtml(item.name||'')}" required></div>
+    <div class="field">
+      <label>Loại *</label>
+      <select id="${idPrefix}-category">
+        ${Object.keys(CATEGORY_LABEL).map(c=>`<option value="${c}" ${cat===c?'selected':''}>${CATEGORY_LABEL[c]}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Size</label><input type="text" id="${idPrefix}-size" value="${escapeHtml(item.size||'')}" placeholder="S/M/L/38/40/freesize..."></div>
+    <div class="field"><label>Ảnh (không bắt buộc)</label><input type="file" accept="image/*" capture="environment" id="${idPrefix}-photo"></div>
+    <div class="field"><label>Giá thuê / ngày</label><input type="text" inputmode="numeric" id="${idPrefix}-price-day" value="${item.rent_price_day?Number(item.rent_price_day).toLocaleString('vi-VN'):''}"></div>
+    <div class="field"><label>Giá thuê / giờ (nếu cho thuê theo giờ)</label><input type="text" inputmode="numeric" id="${idPrefix}-price-hour" value="${item.rent_price_hour?Number(item.rent_price_hour).toLocaleString('vi-VN'):''}"></div>
+    <div class="field"><label>Cọc gợi ý</label><input type="text" inputmode="numeric" id="${idPrefix}-deposit" value="${item.deposit_value?Number(item.deposit_value).toLocaleString('vi-VN'):''}"></div>
+    <div class="field"><label>Giá đền (nếu làm hỏng)</label><input type="text" inputmode="numeric" id="${idPrefix}-replace" value="${item.replace_value?Number(item.replace_value).toLocaleString('vi-VN'):''}"></div>
+    <div class="field"><label>Giá vốn</label><input type="text" inputmode="numeric" id="${idPrefix}-cost" value="${item.cost_price?Number(item.cost_price).toLocaleString('vi-VN'):''}"></div>
+    <div class="field"><label>Buffer giặt (giờ)</label><input type="text" inputmode="numeric" id="${idPrefix}-buffer" value="${item.buffer_hours!=null?item.buffer_hours:DEFAULT_BUFFER_BY_CATEGORY[cat]}"></div>
+    <div class="field"><label>Ghi chú</label><textarea id="${idPrefix}-note">${escapeHtml(item.note||'')}</textarea></div>
+  `;
+}
+
+function openAddItemModal(onCreated){
+  openModal(`
+    <h3>Thêm món</h3>
+    <form id="item-form">
+      ${itemFormFieldsHtml(null, 'i')}
+      <div class="modal-actions"><button type="submit" class="btn">Lưu món</button></div>
+    </form>
+  `);
+  wireItemForm('i', null, onCreated);
+}
+
+function openEditItemModal(item){
+  openModal(`
+    <h3>Sửa món ${item.code}</h3>
+    <form id="item-form">
+      ${itemFormFieldsHtml(item, 'i')}
+      <div class="modal-actions"><button type="submit" class="btn">Lưu thay đổi</button></div>
+    </form>
+  `);
+  wireItemForm('i', item, ()=>openItemDetail(item.id));
+}
+
+function wireItemForm(idPrefix, existingItem, onDone){
+  attachMoneyFormatting(document.getElementById(`${idPrefix}-price-day`));
+  attachMoneyFormatting(document.getElementById(`${idPrefix}-price-hour`));
+  attachMoneyFormatting(document.getElementById(`${idPrefix}-deposit`));
+  attachMoneyFormatting(document.getElementById(`${idPrefix}-replace`));
+  attachMoneyFormatting(document.getElementById(`${idPrefix}-cost`));
+  const catSelect = document.getElementById(`${idPrefix}-category`);
+  const bufferInput = document.getElementById(`${idPrefix}-buffer`);
+  let bufferTouched = !!existingItem;
+  bufferInput.addEventListener('input', ()=>{ bufferTouched = true; });
+  catSelect.addEventListener('change', ()=>{
+    if(!bufferTouched) bufferInput.value = DEFAULT_BUFFER_BY_CATEGORY[catSelect.value];
+  });
+
+  document.getElementById('item-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    const name = document.getElementById(`${idPrefix}-name`).value.trim();
+    if(!name){ toast('Nhập tên món'); return; }
+    const payload = {
+      name,
+      category: catSelect.value,
+      size: document.getElementById(`${idPrefix}-size`).value.trim() || null,
+      rent_price_day: parseMoneyInput(document.getElementById(`${idPrefix}-price-day`).value),
+      rent_price_hour: parseMoneyInput(document.getElementById(`${idPrefix}-price-hour`).value),
+      deposit_value: parseMoneyInput(document.getElementById(`${idPrefix}-deposit`).value),
+      replace_value: parseMoneyInput(document.getElementById(`${idPrefix}-replace`).value),
+      cost_price: parseMoneyInput(document.getElementById(`${idPrefix}-cost`).value),
+      buffer_hours: parseInt(document.getElementById(`${idPrefix}-buffer`).value, 10) || 0,
+      note: document.getElementById(`${idPrefix}-note`).value.trim() || null
+    };
+    btn.disabled = true;
+    const photoFile = document.getElementById(`${idPrefix}-photo`).files[0] || null;
+
+    let itemId = existingItem ? existingItem.id : null;
+    if(existingItem){
+      const {error} = await sb.from('items').update(payload).eq('id', existingItem.id);
+      if(error){ toast('Lỗi: '+error.message); btn.disabled = false; return; }
+    } else {
+      const {data, error} = await sb.from('items').insert(payload).select().single();
+      if(error){ toast('Lỗi tạo món: '+error.message); btn.disabled = false; return; }
+      itemId = data.id;
+    }
+
+    if(photoFile){
+      try{
+        const resized = await resizeImageFile(photoFile, 800);
+        const url = await uploadItemPhoto(itemId, resized);
+        const {error: photoErr} = await sb.from('items').update({photo_url:url}).eq('id', itemId);
+        if(photoErr){ toast('Lưu món OK nhưng lỗi ảnh: '+photoErr.message); }
+      }catch(photoEx){
+        toast('Lưu món OK nhưng lỗi xử lý ảnh: '+photoEx.message);
+      }
+    }
+
+    closeModal(); toast('Đã lưu món');
+    if(onDone) onDone(itemId);
+    else if(currentTab==='kho') renderKho();
+  });
+}
+
+/* ---------- Chi tiết món ---------- */
+async function openItemDetail(itemId){
+  const {data: item} = await sb.from('items').select('*').eq('id', itemId).single();
+  if(!item){ toast('Không tìm thấy món'); return; }
+  const {data: oiRows} = await sb.from('order_items').select('*, orders(id,code,status,pickup_at,return_due_at)').eq('item_id', itemId);
+  const rows = oiRows || [];
+
+  const activeRows = rows.filter(r=>r.orders && r.orders.status !== 'cancelled');
+  const rentalCount = activeRows.length;
+  const revenue = activeRows.reduce((s,r)=>s+Number(r.price),0);
+  const costPrice = Number(item.cost_price||0);
+  const roiHtml = costPrice > 0
+    ? (revenue >= costPrice ? `Đã hoàn vốn ✅ (dư ${money(revenue-costPrice)})` : `Còn ${money(costPrice-revenue)} nữa hoàn vốn`)
+    : `Chưa nhập giá vốn`;
+
+  const nowMs = Date.now();
+  const ordersForBusy = [];
+  const seenOrderIds = new Set();
+  rows.forEach(r=>{
+    if(r.orders && !seenOrderIds.has(r.orders.id)){ seenOrderIds.add(r.orders.id); ordersForBusy.push(r.orders); }
+  });
+  const orderItemsForBusy = rows.map(r=>({order_id: r.order_id, item_id: itemId}));
+  const busy = itemBusyIntervals(item, ordersForBusy, orderItemsForBusy, nowMs);
+  const horizon14 = nowMs + 14*24*3600000;
+  const upcomingBusy = busy.filter(iv=>iv.startMs < horizon14 && iv.endMs > nowMs).sort((a,b)=>a.startMs-b.startMs);
+
+  const photoHtml = item.photo_url ? `<img src="${escapeHtml(item.photo_url)}" alt="">` : (CATEGORY_EMOJI[item.category]||'📦');
+  const canDelete = rows.length === 0;
+
+  openModal(`
+    <h3>${item.code} — ${escapeHtml(item.name)}</h3>
+    <div class="item-photo-lg">${photoHtml}</div>
+    <div class="kv"><span class="k">Loại</span><span class="v">${CATEGORY_LABEL[item.category]||item.category}</span></div>
+    <div class="kv"><span class="k">Size</span><span class="v">${escapeHtml(item.size||'—')}</span></div>
+    <div class="kv"><span class="k">Giá thuê/ngày</span><span class="v">${money(item.rent_price_day)}</span></div>
+    <div class="kv"><span class="k">Giá thuê/giờ</span><span class="v">${item.rent_price_hour>0?money(item.rent_price_hour):'—'}</span></div>
+    <div class="kv"><span class="k">Cọc gợi ý</span><span class="v">${money(item.deposit_value)}</span></div>
+    <div class="kv"><span class="k">Giá đền</span><span class="v">${money(item.replace_value)}</span></div>
+    <div class="kv"><span class="k">Giá vốn</span><span class="v">${money(item.cost_price)}</span></div>
+    <div class="kv"><span class="k">Buffer giặt</span><span class="v">${item.buffer_hours} giờ</span></div>
+    ${item.note ? `<div class="kv"><span class="k">Ghi chú</span><span class="v">${escapeHtml(item.note)}</span></div>` : ''}
+
+    <div class="section-title">Trạng thái tay</div>
+    <div class="manual-status-chips" id="manual-status-chips">
+      ${Object.keys(MANUAL_STATUS_LABEL).map(s=>`<button type="button" class="chip ${item.manual_status===s?'active':''}" data-status="${s}">${MANUAL_STATUS_LABEL[s]}</button>`).join('')}
+    </div>
+
+    <div class="section-title">Lịch bận 14 ngày tới</div>
+    ${upcomingBusy.length ? upcomingBusy.map(iv=>`
+      <div class="busy-row" data-order-id="${iv.orderId}">
+        <span>${iv.orderCode}</span>
+        <span>${formatDateTimeVN(new Date(iv.startMs).toISOString())} → ${formatDateTimeVN(new Date(iv.endMs).toISOString())}</span>
+      </div>`).join('') : `<div class="empty-state">Không có lịch bận trong 14 ngày tới</div>`}
+
+    <div class="section-title">Thống kê</div>
+    <div class="kv"><span class="k">Số lượt thuê</span><span class="v">${rentalCount}</span></div>
+    <div class="kv"><span class="k">Doanh thu tích lũy</span><span class="v">${money(revenue)}</span></div>
+    <div class="kv"><span class="k">Hoàn vốn</span><span class="v">${roiHtml}</span></div>
+
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button class="btn secondary block-sm" id="btn-edit-item">Sửa món</button>
+      ${canDelete ? `<button class="btn danger block-sm" id="btn-delete-item">Xóa món</button>` : ''}
+    </div>
+  `);
+
+  document.querySelectorAll('#manual-status-chips .chip').forEach(chip=>{
+    chip.addEventListener('click', async ()=>{
+      const {error} = await sb.from('items').update({manual_status: chip.dataset.status}).eq('id', itemId);
+      if(error){ toast('Lỗi: '+error.message); return; }
+      toast('Đã cập nhật trạng thái');
+      openItemDetail(itemId);
+    });
+  });
+  document.querySelectorAll('.busy-row[data-order-id]').forEach(row=>{
+    row.addEventListener('click', ()=>openOrderDetail(row.dataset.orderId));
+  });
+  document.getElementById('btn-edit-item').addEventListener('click', ()=>openEditItemModal(item));
+  document.getElementById('btn-delete-item')?.addEventListener('click', async ()=>{
+    if(!confirm(`Xóa món ${item.code}? Không thể hoàn tác.`)) return;
+    const btn = document.getElementById('btn-delete-item');
+    btn.disabled = true;
+    const {error} = await sb.from('items').delete().eq('id', itemId);
+    if(error){ toast('Lỗi xóa (có thể đã có lịch sử): '+error.message); btn.disabled = false; return; }
+    closeModal(); toast('Đã xóa món');
+    if(currentTab==='kho') renderKho();
   });
 }
 
@@ -1252,12 +2041,30 @@ async function loadReport(){
   const body = document.getElementById('rp-body');
   body.innerHTML = '<div class="loading">Đang tải...</div>';
   const {startISO, endISO} = vnMonthRange(reportMonth);
-  const [txRes, ordersRes] = await Promise.all([
+  const [txRes, ordersRes, orderItemsRes] = await Promise.all([
     sb.from('transactions').select('*').gte('occurred_at',startISO).lt('occurred_at',endISO),
-    sb.from('orders').select('id,deposit_amount,deposit_returned_amount,deposit_type,status')
+    sb.from('orders').select('id,deposit_amount,deposit_returned_amount,deposit_type,status'),
+    sb.from('order_items').select('item_id, price, order:orders(pickup_at,status), item:items(name)')
   ]);
   const tx = txRes.data || [];
   const orders = ordersRes.data || [];
+
+  // Theo món: doanh thu = tổng price snapshot của order_items (không dùng giá live của món),
+  // chỉ tính đơn có pickup_at trong tháng đang xem và status khác 'cancelled' (mục 3 todo-phase2.md).
+  const startMs = new Date(startISO).getTime();
+  const endMs = new Date(endISO).getTime();
+  const itemRevenue = {};
+  (orderItemsRes.data||[]).forEach(oi=>{
+    if(!oi.item || !oi.order) return;
+    if(oi.order.status === 'cancelled') return;
+    const pMs = new Date(oi.order.pickup_at).getTime();
+    if(pMs < startMs || pMs >= endMs) return;
+    const key = oi.item_id;
+    if(!itemRevenue[key]) itemRevenue[key] = {name: oi.item.name, count:0, revenue:0};
+    itemRevenue[key].count += 1;
+    itemRevenue[key].revenue += Number(oi.price||0);
+  });
+  const topItems = Object.values(itemRevenue).sort((a,b)=>b.revenue-a.revenue);
 
   const totalThu = tx.filter(t=>t.type==='thu').reduce((s,t)=>s+Number(t.amount),0);
   const totalChi = tx.filter(t=>t.type==='chi').reduce((s,t)=>s+Number(t.amount),0);
@@ -1291,6 +2098,14 @@ async function loadReport(){
     <table class="report-table">
       <tbody>
       ${chiRows.length ? chiRows.map(r=>`<tr><td>${r[0]}</td><td class="amt">${money(r[1])}</td></tr>`).join('') : '<tr><td colspan="2">Không có</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="section-title">Theo món</div>
+    <table class="report-table">
+      <thead><tr><th>Món</th><th>Lượt</th><th>Doanh thu</th></tr></thead>
+      <tbody>
+      ${topItems.length ? topItems.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td>${r.count}</td><td class="amt">${money(r.revenue)}</td></tr>`).join('') : '<tr><td colspan="3">Không có</td></tr>'}
       </tbody>
     </table>
 
