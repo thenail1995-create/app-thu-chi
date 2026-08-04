@@ -279,6 +279,10 @@ const DEFAULT_BUFFER_BY_CATEGORY = {vay:24, ao_dai:24, phu_kien:0, props:0, khac
 let currentTab = 'today';
 let currentUser = null;
 
+// ---- Push notification: chỉ public key (an toàn để lộ) — private key CHỈ nằm trong Edge Function ----
+const VAPID_PUBLIC_KEY = 'BPV1dyYgcMAhBQ03tj9N0jM5eaWsrZXihTqB2e1h0JurOy2igankg-sHZfmy2D0uOpJfjUI1s8kCVbAlTcvMIns';
+const NOTIFY_FN_URL = 'https://ttnfrnlsgmfmqcframzy.supabase.co/functions/v1/notify';
+
 /* ============================================================
    UTIL: tiền tệ + thời gian (múi giờ Asia/Ho_Chi_Minh, UTC+7 cố định)
    ============================================================ */
@@ -832,6 +836,7 @@ async function afterLogin(user){
   document.getElementById('login-retry-box').classList.add('hidden');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
+  registerServiceWorkerIfSupported();
   switchTab('today');
 }
 
@@ -904,6 +909,146 @@ function modalHasContent(){
 }
 
 /* ============================================================
+   PUSH NOTIFICATIONS
+   ============================================================ */
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i=0; i<rawData.length; i++){
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+function pushSupported(){
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+}
+function isIOSDevice(){
+  return /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isStandaloneDisplay(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+async function registerServiceWorkerIfSupported(){
+  if(!pushSupported()) return;
+  try{
+    await navigator.serviceWorker.register('sw.js');
+  }catch(e){
+    // Im lặng — không chặn app nếu đăng ký SW lỗi (trình duyệt cũ, môi trường không hỗ trợ...).
+  }
+}
+async function hasDbPushSubscription(){
+  if(!pushSupported()) return false;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(!sub) return false;
+    const {data} = await sb.from('push_subscriptions').select('id').eq('endpoint', sub.endpoint).maybeSingle();
+    return !!data;
+  }catch(e){
+    return false;
+  }
+}
+// Trạng thái card "🔔 Bật thông báo" trên tab Hôm nay:
+// 'enable' = hiện nút bật (chưa granted, hoặc granted nhưng chưa có subscription trong DB)
+// 'ios-install' = iOS Safari chưa cài PWA ra màn hình chính (Push API chưa khả dụng)
+// 'active' = đã bật + có subscription trong DB → hiện dòng nhỏ + nút "Tắt"
+// 'hidden' = không đăng nhập, permission đã denied, hoặc trình duyệt desktop không hỗ trợ (không phải iOS)
+async function computePushCardState(){
+  if(!currentUser) return {state:'hidden'};
+  if(!pushSupported()){
+    if(isIOSDevice() && !isStandaloneDisplay()) return {state:'ios-install'};
+    return {state:'hidden'};
+  }
+  if(Notification.permission === 'denied') return {state:'hidden'};
+  if(Notification.permission !== 'granted') return {state:'enable'};
+  const hasDb = await hasDbPushSubscription();
+  return {state: hasDb ? 'active' : 'enable'};
+}
+function pushCardHtml(pc){
+  if(!pc || pc.state === 'hidden') return '';
+  if(pc.state === 'ios-install'){
+    return `<div class="card" id="push-card">
+      <div style="font-weight:700;margin-bottom:4px;">🔔 Bật thông báo</div>
+      <div style="font-size:13px;color:var(--muted);">Cài app ra màn hình chính trước rồi mở từ icon để bật thông báo.</div>
+    </div>`;
+  }
+  if(pc.state === 'active'){
+    return `<div class="card" id="push-card" style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:13px;">🔔 Đã bật thông báo</div>
+      <button type="button" class="btn ghost block-sm" id="btn-disable-push">Tắt</button>
+    </div>`;
+  }
+  return `<div class="card" id="push-card">
+    <div style="font-weight:700;margin-bottom:6px;">🔔 Bật thông báo</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Nhận nhắc lịch nhận/trả đồ và tổng kết thu chi mỗi ngày.</div>
+    <button type="button" class="btn block-sm" id="btn-enable-push">Bật thông báo</button>
+  </div>`;
+}
+async function subscribeToPush(){
+  if(!pushSupported()) return;
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      toast('Bạn đã từ chối quyền thông báo');
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const subJson = sub.toJSON();
+    const deviceLabel = (navigator.userAgent || '').slice(0, 120);
+    const {error: upsertErr} = await sb.from('push_subscriptions').upsert({
+      endpoint: sub.endpoint,
+      subscription: subJson,
+      device_label: deviceLabel
+    }, {onConflict: 'endpoint'});
+    if(upsertErr){ toast('Lỗi lưu đăng ký: '+viError(upsertErr), 4000); return; }
+
+    // Gửi push thử NGAY tới đúng endpoint vừa đăng ký — xác thực bằng JWT của user đang đăng nhập
+    // (KHÔNG dùng NOTIFY_SECRET ở client, secret chỉ nằm trong Edge Function + lệnh cron).
+    try{
+      const {data: sessionData} = await sb.auth.getSession();
+      const accessToken = sessionData && sessionData.session && sessionData.session.access_token;
+      if(accessToken){
+        await fetch(NOTIFY_FN_URL, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json', 'Authorization': 'Bearer '+accessToken},
+          body: JSON.stringify({mode:'test', endpoint: sub.endpoint})
+        });
+      }
+    }catch(e){
+      // Không chặn — subscription đã lưu DB thành công dù gọi thử thất bại (vd mất mạng đúng lúc đó).
+    }
+    toast('Đã bật — kiểm tra thông báo vừa gửi');
+    if(currentTab==='today') renderToday();
+  }catch(e){
+    toast('Lỗi bật thông báo: '+(e && e.message ? e.message : String(e)), 4000);
+  }
+}
+async function unsubscribeFromPush(){
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(sub){
+      const endpoint = sub.endpoint;
+      await sub.unsubscribe();
+      await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+    }
+    toast('Đã tắt thông báo');
+    if(currentTab==='today') renderToday();
+  }catch(e){
+    toast('Lỗi tắt thông báo: '+(e && e.message ? e.message : String(e)), 4000);
+  }
+}
+
+/* ============================================================
    TAB 1: HÔM NAY
    ============================================================ */
 async function renderToday(){
@@ -934,6 +1079,7 @@ async function renderToday(){
     if(!oi.item) return;
     (itemNamesByOrder[oi.order_id] = itemNamesByOrder[oi.order_id]||[]).push(oi.item.name);
   });
+  const pushCard = await computePushCardState();
 
   const dayStartMsForTx = new Date(dayStart).getTime();
   const dayEndMsForTx = new Date(dayEnd).getTime();
@@ -1002,6 +1148,7 @@ async function renderToday(){
   }
 
   let html = '';
+  html += pushCardHtml(pushCard);
   html += `<div class="summary-row">
     <div class="summary-item" id="tile-thu-hom-nay" style="cursor:pointer;"><div class="lbl">Thu hôm nay</div><div class="val">${money(thuHomNay)}</div></div>
     <div class="summary-item"><div class="lbl">Thu tháng</div><div class="val">${money(thuThang)}</div></div>
@@ -1076,6 +1223,18 @@ async function renderToday(){
   });
   document.getElementById('tile-coc-giu')?.addEventListener('click', ()=>{
     openDepositHeldListModal(orders, customers);
+  });
+  document.getElementById('btn-enable-push')?.addEventListener('click', async (e)=>{
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Đang bật...';
+    await subscribeToPush();
+    btn.disabled = false;
+    btn.textContent = 'Bật thông báo';
+  });
+  document.getElementById('btn-disable-push')?.addEventListener('click', async ()=>{
+    if(!confirm('Tắt thông báo trên thiết bị này?')) return;
+    await unsubscribeFromPush();
   });
 }
 
