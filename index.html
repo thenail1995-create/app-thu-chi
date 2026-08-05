@@ -496,6 +496,12 @@ function depositHeld(order){
   if(!['booked','picked_up','returned'].includes(order.status)) return 0;
   return Number(order.deposit_amount) - Number(order.deposit_returned_amount || 0);
 }
+// Audit tổng #9: đơn CHƯA CHỐT GIÁ (rental_price=0, thường do tạo nhanh rồi quên điền giá) và
+// chưa hủy — cần cảnh báo rõ để chủ tiệm không quên thu tiền. Không tính đơn đã 'cancelled' (giá
+// 0 ở đơn hủy là bình thường, không cần cảnh báo). Hàm mới, KHÔNG đụng 3 hàm tiền/cọc phía trên.
+function isPriceUnset(order){
+  return Number(order.rental_price) === 0 && order.status !== 'cancelled';
+}
 
 /* ============================================================
    PHASE 2 — LỊCH TỪNG MÓN / CHỐNG TRÙNG LỊCH
@@ -657,12 +663,18 @@ function computeItemStatusForDate(item, orders, orderItems, dateStr){
   const nowMs = Date.now();
   const isToday = dateStr === vnDateStr();
   const busy = itemBusyIntervals(item, orders, orderItems, nowMs);
+  const {startISO, endISO} = vnDayRange(dateStr);
+  const dayStartMs = new Date(startISO).getTime();
+  const dayEndMs = new Date(endISO).getTime();
+  const in24hMs = nowMs + 24*3600000;
 
-  // Audit-batch-UX-1 #4: 'hong'/'nghi' luôn chặn mọi ngày (hỏng/ngưng cho thuê không tự hết hạn).
-  // 'giat'/'sua' chỉ phản ánh tình trạng HÔM NAY — ngày TƯƠNG LAI tính theo lịch như bình thường
-  // (món sẽ giặt/sửa xong trước đó), chỉ kèm chú thích nhỏ chứ không chặn.
+  // Audit-batch-UX-1 #4 + Audit tổng #8: 'hong'/'nghi' luôn chặn mọi ngày (hỏng/ngưng cho thuê
+  // không tự hết hạn). 'giat'/'sua' chặn khi khoảng NGÀY ĐANG XEM bắt đầu trong vòng 24h kể từ
+  // now (dayStartMs < now+24h) — CÙNG công thức với conflictForItem (form đơn) để lưới Kho và
+  // form đơn luôn cho ra cùng 1 câu trả lời; ngày xa hơn 24h thì coi như đã giặt/sửa xong.
   const manualBlocksAlways = item.manual_status==='hong' || item.manual_status==='nghi';
   const manualIsTemporary = item.manual_status==='giat' || item.manual_status==='sua';
+  const manualTemporaryBlocksThisView = manualIsTemporary && dayStartMs <= in24hMs;
 
   if(manualBlocksAlways){
     const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
@@ -673,9 +685,9 @@ function computeItemStatusForDate(item, orders, orderItems, dateStr){
       nextAvailableMs:null, nextAvailableUnknown:false
     };
   }
-  if(manualIsTemporary && isToday){
+  if(manualTemporaryBlocksThisView){
     const baseLabel = MANUAL_STATUS_LABEL[item.manual_status]||item.manual_status;
-    const currentlyBusyNow = busy.some(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
+    const currentlyBusyNow = isToday && busy.some(iv=>iv.startMs<=nowMs && nowMs<iv.endMs);
     return {
       color:'gray',
       label: currentlyBusyNow ? `${baseLabel} (đang thuê)` : baseLabel,
@@ -705,13 +717,11 @@ function computeItemStatusForDate(item, orders, orderItems, dateStr){
     return {color:'green', label:'Sẵn sàng', nextAvailableMs:null, nextAvailableUnknown:false};
   }
 
-  // Ngày khác hôm nay: hỏi checkConflict xem cả ngày [00:00,24:00) giờ VN có đụng lịch không.
-  // 'giat'/'sua' KHÔNG được truyền vào để chặn ở đây (coi như 'ok'), chỉ 'hong'/'nghi' mới chặn
-  // (đã return sớm ở nhánh manualBlocksAlways phía trên nên tới đây chắc chắn không phải 2 loại đó).
-  const noteSuffix = manualIsTemporary ? ` (hôm nay đang ${item.manual_status==='giat'?'giặt':'sửa'})` : '';
-  const {startISO, endISO} = vnDayRange(dateStr);
-  const dayStartMs = new Date(startISO).getTime();
-  const dayEndMs = new Date(endISO).getTime();
+  // Ngày khác hôm nay (và không bị manualTemporaryBlocksThisView chặn ở trên — nghĩa là ngày này
+  // đủ xa để món giặt/sửa xong trước đó): hỏi checkConflict xem cả ngày [00:00,24:00) giờ VN có
+  // đụng lịch không. 'giat'/'sua' KHÔNG truyền vào để chặn ở đây (coi như 'ok'), chỉ 'hong'/'nghi'
+  // mới chặn (đã return sớm ở nhánh manualBlocksAlways phía trên nên tới đây chắc chắn không phải).
+  const noteSuffix = manualIsTemporary ? ` (đang ${item.manual_status==='giat'?'giặt':'sửa'}, xong trước ngày này)` : '';
   const conflict = checkConflict(item.id, dayStartMs, dayEndMs, item.buffer_hours, busy, null, 'ok');
   if(conflict){
     return {color:'yellow', label:'Vướng lịch (kể cả giờ nghỉ giặt)'+noteSuffix, nextAvailableMs:null, nextAvailableUnknown:false};
@@ -1039,7 +1049,15 @@ async function unsubscribeFromPush(){
     if(sub){
       const endpoint = sub.endpoint;
       await sub.unsubscribe();
-      await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      // Audit tổng #12: kiểm tra lỗi xóa DB — nếu xóa thất bại (mất mạng, RLS,...) thì báo rõ và
+      // KHÔNG báo "đã tắt" giả (dòng push_subscriptions còn sót lại → server vẫn gửi push tới máy
+      // đã unsubscribe được ở trình duyệt, gây lỗi/gây phiền, chủ tiệm cần biết để bấm lại).
+      const {error: delErr} = await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if(delErr){
+        toast('Chưa tắt được — thử lại', 4000);
+        if(currentTab==='today') renderToday();
+        return;
+      }
     }
     toast('Đã tắt thông báo');
     if(currentTab==='today') renderToday();
@@ -1130,6 +1148,8 @@ async function renderToday(){
     const isOverdue = opts.overdue;
     const khoNames = itemNamesByOrder[o.id];
     const itemsLabel = [khoNames && khoNames.length ? khoNames.join(', ') : '', o.items_text || ''].filter(Boolean).join(' · ');
+    // Audit tổng #9: badge đỏ cảnh báo đơn chưa chốt giá thuê (rental_price=0, chưa hủy).
+    const priceUnsetBadge = isPriceUnset(o) ? `<div class="overdue-tag">⚠️ Chưa chốt giá</div>` : '';
     return `<div class="card order-card ${isOverdue?'overdue-card':''}" data-order-id="${o.id}">
       <div class="row1">
         <span class="name">${escapeHtml(c.name)}</span>
@@ -1141,6 +1161,7 @@ async function renderToday(){
         ${money(o.rental_price)}
       </div>
       ${isOverdue ? `<div class="overdue-tag">${opts.lateLabel||''}</div>` : ''}
+      ${priceUnsetBadge}
       <div class="actions">
         ${opts.action}
       </div>
@@ -1257,6 +1278,7 @@ function openDepositHeldListModal(orders, customers){
    ============================================================ */
 let ordersFilterStatus = 'all';
 let ordersSearchTerm = '';
+let ordersFilterPriceUnset = false; // Audit tổng #9: chip lọc "Chưa chốt giá"
 
 async function renderOrders(){
   const el = document.getElementById('tab-content');
@@ -1296,6 +1318,10 @@ async function renderOrders(){
   <div class="filter-row">
     <input type="text" id="search-order" placeholder="Tìm tên / SĐT / mã đơn" value="${escapeHtml(ordersSearchTerm)}">
   </div>`;
+  // Audit tổng #9: chip lọc riêng "Chưa chốt giá" (độc lập với dropdown trạng thái).
+  html += `<div class="chips" id="orders-extra-chips">
+    <button type="button" class="chip ${ordersFilterPriceUnset?'active':''}" id="chip-price-unset">⚠️ Chưa chốt giá</button>
+  </div>`;
   html += `<div id="orders-list"></div>`;
   el.innerHTML = html;
 
@@ -1308,6 +1334,11 @@ async function renderOrders(){
     ordersSearchTerm = e.target.value;
     paintOrdersList(orders, customers, itemNamesByOrder);
   });
+  document.getElementById('chip-price-unset').addEventListener('click', (e)=>{
+    ordersFilterPriceUnset = !ordersFilterPriceUnset;
+    e.currentTarget.classList.toggle('active', ordersFilterPriceUnset);
+    paintOrdersList(orders, customers, itemNamesByOrder);
+  });
   document.getElementById('btn-new-order').addEventListener('click', ()=>openNewOrderModal());
 
   paintOrdersList(orders, customers, itemNamesByOrder);
@@ -1318,6 +1349,7 @@ function paintOrdersList(orders, customers, itemNamesByOrder){
   const term = ordersSearchTerm.trim().toLowerCase();
   const filtered = orders.filter(o=>{
     if(ordersFilterStatus !== 'all' && o.status !== ordersFilterStatus) return false;
+    if(ordersFilterPriceUnset && !isPriceUnset(o)) return false;
     if(!term) return true;
     const c = customers[o.customer_id] || {};
     return (c.name||'').toLowerCase().includes(term) ||
@@ -1332,6 +1364,8 @@ function paintOrdersList(orders, customers, itemNamesByOrder){
     const c = customers[o.customer_id] || {name:'(?)',phone:''};
     const khoNames = (itemNamesByOrder||{})[o.id];
     const itemsLabel = [khoNames && khoNames.length ? khoNames.join(', ') : '', o.items_text || ''].filter(Boolean).join(' · ');
+    // Audit tổng #9: dòng cảnh báo chưa chốt giá trong danh sách Đơn thuê.
+    const priceUnsetBadge = isPriceUnset(o) ? `<div class="overdue-tag">⚠️ Chưa chốt giá</div>` : '';
     return `<div class="card order-card" data-order-id="${o.id}">
       <div class="row1">
         <span class="name">${escapeHtml(c.name)} <span class="badge ${o.status}">${STATUS_LABEL[o.status]}</span></span>
@@ -1340,6 +1374,7 @@ function paintOrdersList(orders, customers, itemNamesByOrder){
       <div class="items">${escapeHtml(itemsLabel)}</div>
       <div class="meta">Nhận: ${formatDateTimeVN(o.pickup_at)} · Trả: ${formatDateTimeVN(o.return_due_at)}</div>
       <div class="meta">${money(o.rental_price)} · Cọc: ${money(o.deposit_amount)} (${DEPOSIT_LABEL[o.deposit_type]})</div>
+      ${priceUnsetBadge}
       <div class="actions"><button class="btn secondary block-sm" data-action="open-order" data-id="${o.id}">Chi tiết</button></div>
     </div>`;
   }).join('');
@@ -1885,6 +1920,7 @@ async function openOrderDetail(orderId){
     <div class="kv"><span class="k">Trả lúc (hạn)</span><span class="v">${formatDateTimeVN(order.return_due_at)}</span></div>
     ${order.returned_at ? `<div class="kv"><span class="k">Đã trả lúc</span><span class="v">${formatDateTimeVN(order.returned_at)}</span></div>` : ''}
     <div class="kv"><span class="k">Trạng thái</span><span class="v"><span class="badge ${order.status}">${STATUS_LABEL[order.status]}</span></span></div>
+    ${isPriceUnset(order) ? `<div class="overdue-tag">⚠️ Chưa chốt giá</div>` : ''}
     <div class="kv"><span class="k">Tiền thuê</span><span class="v">${money(order.rental_price)}</span></div>
     <div class="kv"><span class="k">Còn thiếu</span><span class="v ${remaining>0?'remain-warn':''}">${money(remaining)}</span></div>
     <div class="kv"><span class="k">Tiền cọc</span><span class="v">${money(order.deposit_amount)} (${DEPOSIT_LABEL[order.deposit_type]})</span></div>
@@ -2069,29 +2105,36 @@ function flowPickedUpToReturned(orderId, onDone){
     const isOverdue = order.status==='picked_up' && new Date(order.return_due_at).getTime() < Date.now();
 
     if(isOverdue){
-      // B5: đơn quá hạn → hỏi thu phí trễ trước khi chuyển trạng thái.
-      openModal(`
-        <h3>Khách trả trễ ${formatOverdueDuration(order.return_due_at)}</h3>
-        <p>Hạn trả: ${formatDateTimeVN(order.return_due_at)}. Thu phí trễ?</p>
-        <div class="field"><label>Số tiền thu phí trễ</label><input type="text" inputmode="numeric" id="f-latefee" value="0"></div>
-        <div class="modal-actions">
-          <button class="btn secondary" id="btn-skip-latefee">Bỏ qua</button>
-          <button class="btn" id="btn-confirm-latefee">Thu</button>
-        </div>
-      `);
-      attachMoneyFormatting(document.getElementById('f-latefee'));
-      document.getElementById('btn-skip-latefee').addEventListener('click', ()=>{
-        proceedAfterReturn(order, orderItemsList, onDone);
-      });
-      document.getElementById('btn-confirm-latefee').addEventListener('click', async ()=>{
-        const btn = document.getElementById('btn-confirm-latefee');
-        const amount = parseMoneyInput(document.getElementById('f-latefee').value);
-        btn.disabled = true;
-        if(amount > 0){
-          const {error:txErr} = await sb.from('transactions').insert({type:'thu', category:'phi_tre', amount, order_id: order.id});
-          if(txErr){ toastError(txErr); btn.disabled = false; return; }
-        }
-        proceedAfterReturn(order, orderItemsList, onDone);
+      // Audit tổng #4: kiểm tra đã thu phí trễ cho đơn này trước đó chưa (VD: thu qua nút khác,
+      // hoặc modal này bị đóng giữa chừng rồi mở lại) — tránh thu chồng, mặc định gợi ý 0đ nếu đã thu.
+      sb.from('transactions').select('amount').eq('order_id', order.id).eq('category','phi_tre').then(({data:phiTreRows})=>{
+        const already = (phiTreRows||[]).reduce((s,t)=>s+Number(t.amount),0);
+        const alreadyNote = already > 0 ? `<p class="remain-warn">Đã thu phí trễ ${money(already)} trước đó.</p>` : '';
+        // B5: đơn quá hạn → hỏi thu phí trễ trước khi chuyển trạng thái.
+        openModal(`
+          <h3>Khách trả trễ ${formatOverdueDuration(order.return_due_at)}</h3>
+          <p>Hạn trả: ${formatDateTimeVN(order.return_due_at)}. Thu phí trễ?</p>
+          ${alreadyNote}
+          <div class="field"><label>Số tiền thu phí trễ</label><input type="text" inputmode="numeric" id="f-latefee" value="0"></div>
+          <div class="modal-actions">
+            <button class="btn secondary" id="btn-skip-latefee">Bỏ qua</button>
+            <button class="btn" id="btn-confirm-latefee">Thu</button>
+          </div>
+        `);
+        attachMoneyFormatting(document.getElementById('f-latefee'));
+        document.getElementById('btn-skip-latefee').addEventListener('click', ()=>{
+          proceedAfterReturn(order, orderItemsList, onDone);
+        });
+        document.getElementById('btn-confirm-latefee').addEventListener('click', async ()=>{
+          const btn = document.getElementById('btn-confirm-latefee');
+          const amount = parseMoneyInput(document.getElementById('f-latefee').value);
+          btn.disabled = true;
+          if(amount > 0){
+            const {error:txErr} = await sb.from('transactions').insert({type:'thu', category:'phi_tre', amount, order_id: order.id});
+            if(txErr){ toastError(txErr); btn.disabled = false; return; }
+          }
+          proceedAfterReturn(order, orderItemsList, onDone);
+        });
       });
     } else {
       // Đơn đúng hạn giữ hành vi 1 chạm như cũ (không hỏi phí trễ).
@@ -2493,17 +2536,49 @@ function paintItemGrid(items, orders, orderItems){
     const availLine = status.nextAvailableUnknown
       ? `<div class="item-avail">Chưa rõ ngày có lại (khách chưa trả đồ)</div>`
       : (status.nextAvailableMs ? `<div class="item-avail">Có lại: ${formatShortDateVN(new Date(status.nextAvailableMs).toISOString())}</div>` : '');
-    return `<button type="button" class="item-card" data-item-id="${it.id}">
+    // Audit tổng #5: món đang giặt/sửa → nút nhanh trên card để đánh dấu xong ngay, không phải
+    // vào chi tiết món mới sửa được. Card đổi từ <button> sang <div role=button> để chứa được nút
+    // nhanh lồng bên trong (button không được lồng button hợp lệ).
+    const quickDoneHtml = (it.manual_status==='giat' || it.manual_status==='sua')
+      ? `<button type="button" class="btn secondary item-quick-done" data-quick-done-id="${it.id}" data-quick-done-status="${it.manual_status}">✓ ${it.manual_status==='giat'?'Giặt xong':'Sửa xong'}</button>`
+      : '';
+    return `<div class="item-card" data-item-id="${it.id}" role="button" tabindex="0">
       <div class="thumb">${thumb}</div>
       <div class="info">
         <div class="name"><span class="status-dot ${status.color}"></span>${escapeHtml(it.name)}</div>
         <div class="meta">${it.code}${it.size?(' · '+escapeHtml(it.size)):''}</div>
         <div class="status-label ${status.color}">${escapeHtml(status.label)}</div>
         ${availLine}
+        ${quickDoneHtml}
       </div>
-    </button>`;
+    </div>`;
   }).join('') + `</div>`;
-  gridEl.querySelectorAll('[data-item-id]').forEach(b=>b.addEventListener('click',()=>openItemDetail(b.dataset.itemId)));
+  gridEl.querySelectorAll('.item-card[data-item-id]').forEach(card=>{
+    card.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-quick-done-id]')) return;
+      openItemDetail(card.dataset.itemId);
+    });
+    card.addEventListener('keydown', (e)=>{
+      if((e.key==='Enter' || e.key===' ') && !e.target.closest('[data-quick-done-id]')){
+        e.preventDefault();
+        openItemDetail(card.dataset.itemId);
+      }
+    });
+  });
+  gridEl.querySelectorAll('[data-quick-done-id]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const itemId = btn.dataset.quickDoneId;
+      const statusLabel = btn.dataset.quickDoneStatus==='giat' ? 'giặt' : 'sửa';
+      if(!confirm(`Đánh dấu món này đã ${statusLabel} xong (chuyển về Bình thường)?`)) return;
+      if(btn.disabled) return;
+      btn.disabled = true;
+      const {error} = await sb.from('items').update({manual_status:'ok'}).eq('id', itemId);
+      if(error){ toastError(error); btn.disabled = false; return; }
+      toast(`Đã đánh dấu ${statusLabel} xong`);
+      if(currentTab==='kho') renderKho();
+    });
+  });
 }
 
 /* ---------- Thêm / sửa món ---------- */
